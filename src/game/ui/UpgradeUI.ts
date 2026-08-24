@@ -25,6 +25,7 @@ export class UpgradeUI {
     const title = scene.add
       .text(scene.scale.width / 2, 0, 'LEVEL UP', {
         color: '#f7fbff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '30px',
         fontStyle: '900',
         align: 'center',
@@ -35,6 +36,7 @@ export class UpgradeUI {
     const subtitle = scene.add
       .text(scene.scale.width / 2, 0, 'Choose an Evolution', {
         color: COLORS.uiTextMuted,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '15px',
         fontStyle: '800',
         align: 'center',
@@ -46,10 +48,23 @@ export class UpgradeUI {
       .setDepth(UI_DEPTH.overlay);
     scene.tweens.add({ targets: flash, scale: 1.25, alpha: 0, duration: 460, ease: 'Sine.Out' });
     options.forEach((option, index) => {
-      this.cards.push(this.createCard(option, index, onPick).setScrollFactor(0).setDepth(UI_DEPTH.overlay + 1));
+      this.cards.push(this.createCard(option, index, onPick).setScrollFactor(0).setDepth(UI_DEPTH.overlay + 1).setAlpha(0));
     });
     scene.scale.on('resize', this.layout, this);
     this.layout();
+    this.cards.forEach((card, index) => {
+      const scale = card.scaleX;
+      card.setScale(scale * 0.94);
+      scene.tweens.add({
+        targets: card,
+        alpha: 1,
+        scaleX: scale,
+        scaleY: scale,
+        delay: index * 50,
+        duration: 160,
+        ease: 'Back.Out',
+      });
+    });
   }
 
   destroy(): void {
@@ -74,6 +89,7 @@ export class UpgradeUI {
     const name = this.scene.add
       .text(0, -12, option.name, {
         color: '#ffffff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '19px',
         fontStyle: '900',
         align: 'center',
@@ -85,6 +101,7 @@ export class UpgradeUI {
     const description = this.scene.add
       .text(0, 28, option.description, {
         color: '#dfe9ff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '14px',
         fontStyle: '700',
         align: 'center',
@@ -94,6 +111,7 @@ export class UpgradeUI {
     const level = this.scene.add
       .text(-72, 72, `LV ${(this.levels[option.id] ?? 0) + 1}/${option.maxLevel}`, {
         color: COLORS.uiTextMuted,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '12px',
         fontStyle: '900',
       })
@@ -101,6 +119,7 @@ export class UpgradeUI {
     const rarityText = this.scene.add
       .text(76, 72, option.rarity.toUpperCase(), {
         color: rarity.label,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '12px',
         fontStyle: '900',
       })
@@ -152,12 +171,13 @@ export class UpgradeUI {
       const hitZone = this.hitZones[index];
       if (compact) {
         const x = width / 2;
-        const y = Math.max(248, height * 0.29) + index * 172;
+        const y = Math.max(224, height * 0.25) + index * 172;
         card.setPosition(x, y).setScale(scale);
         hitZone.setPosition(x, y).setScale(scale);
       } else {
-        const x = width / 2 + (index - 1) * 300;
-        const y = shortLandscape ? height * 0.61 : height / 2 + 58;
+        const spacing = shortLandscape ? Math.min(270, width * 0.32) : 300;
+        const x = width / 2 + (index - 1) * spacing;
+        const y = shortLandscape ? height * 0.59 : height / 2 + 4;
         card.setPosition(x, y).setScale(scale);
         hitZone.setPosition(x, y).setScale(scale);
       }
@@ -171,6 +191,6 @@ export class UpgradeUI {
     if (width < 720) {
       return Math.min(0.86, (width - 46) / 286);
     }
-    return Math.min(1, (width - 48) / 900, shortLandscape ? 0.9 : 1);
+    return Math.min(1, (width - 48) / 900, shortLandscape ? 0.82 : 1);
   }
 }

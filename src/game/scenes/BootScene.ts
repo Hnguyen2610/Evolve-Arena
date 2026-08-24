@@ -27,23 +27,33 @@ export class BootScene extends Phaser.Scene {
 
     const graphics = this.add.graphics().setDepth(UI_DEPTH.world);
     const center = 25;
-    graphics.fillStyle(0x092532, 0.96);
-    graphics.fillCircle(center, center + 4, 22);
-    graphics.fillStyle(COLORS.player, 1);
-    graphics.fillCircle(center, center, 21);
-    graphics.lineStyle(4, COLORS.playerCore, 0.95);
-    graphics.strokeCircle(center, center, 19);
+    graphics.fillStyle(0x061d29, 0.98);
+    graphics.fillCircle(center, center + 5, 22);
+    graphics.lineStyle(4, COLORS.player, 0.86);
+    graphics.beginPath();
+    graphics.arc(center, center, 21, -Math.PI * 0.1, Math.PI * 0.72);
+    graphics.strokePath();
+    graphics.beginPath();
+    graphics.arc(center, center, 21, Math.PI * 0.92, Math.PI * 1.72);
+    graphics.strokePath();
+    graphics.lineStyle(2, COLORS.playerCore, 0.92);
+    graphics.strokeCircle(center, center, 15);
+    graphics.fillStyle(COLORS.player, 0.96);
+    graphics.fillCircle(center, center, 17);
     graphics.fillStyle(COLORS.playerCore, 1);
-    graphics.fillCircle(center, center, 10);
-    graphics.fillStyle(0x103849, 0.95);
-    graphics.fillTriangle(center, 6, center + 8, 22, center - 8, 22);
+    graphics.fillCircle(center, center, 8);
+    graphics.fillStyle(0x0b4b61, 0.95);
+    graphics.fillTriangle(center, 4, center + 9, 22, center - 9, 22);
+    graphics.lineStyle(2, COLORS.playerProjectileCore, 0.8);
+    graphics.lineBetween(center - 16, center + 14, center, center + 22);
+    graphics.lineBetween(center + 16, center + 14, center, center + 22);
     graphics.generateTexture('player', 50, 50);
     graphics.destroy();
   }
 
   private makeProjectileTextures(): void {
     this.makeBoltTexture('projectile', 34, COLORS.playerProjectileCore, COLORS.playerProjectile);
-    this.makeBoltTexture('enemy-projectile', 34, COLORS.enemyProjectile, COLORS.enemyProjectileCore);
+    this.makeDangerProjectileTexture();
     this.makeTrailTexture('projectile-trail', 54, COLORS.playerProjectileCore, 0.34);
     this.makeTrailTexture('enemy-projectile-trail', 54, COLORS.enemyProjectile, 0.38);
   }
@@ -73,14 +83,20 @@ export class BootScene extends Phaser.Scene {
   private makeBasicEnemyTexture(): void {
     const colors = ENEMY_COLORS.basic;
     const graphics = this.add.graphics();
-    graphics.fillStyle(colors.stroke, 0.96);
-    graphics.fillCircle(20, 20, 19);
+    graphics.fillStyle(colors.stroke, 1);
+    this.drawPolygon(graphics, 20, 20, [18, 15, 19, 13, 18, 16], -0.35);
     graphics.fillStyle(colors.fill, 1);
-    graphics.fillCircle(20, 20, 15);
+    this.drawPolygon(graphics, 20, 20, [13, 15, 12, 14, 11, 15], -0.15);
+    graphics.fillStyle(colors.stroke, 1);
+    graphics.fillTriangle(2, 15, 11, 8, 9, 20);
+    graphics.fillTriangle(38, 22, 28, 31, 31, 18);
+    graphics.fillTriangle(17, 2, 27, 9, 16, 12);
     graphics.fillStyle(colors.core, 0.95);
-    graphics.fillCircle(20, 20, 6);
+    graphics.fillCircle(20, 20, 6.5);
     graphics.lineStyle(3, colors.core, 0.72);
-    graphics.lineBetween(11, 12, 29, 28);
+    graphics.lineBetween(11, 13, 28, 27);
+    graphics.lineStyle(2, 0xffffff, 0.45);
+    graphics.lineBetween(17, 15, 23, 25);
     graphics.generateTexture('enemy-basic', 40, 40);
     graphics.destroy();
   }
@@ -89,14 +105,19 @@ export class BootScene extends Phaser.Scene {
     const colors = ENEMY_COLORS.runner;
     const graphics = this.add.graphics();
     graphics.fillStyle(colors.stroke, 1);
-    graphics.fillTriangle(18, 1, 35, 35, 1, 35);
+    graphics.fillTriangle(18, 0, 36, 35, 18, 28);
+    graphics.fillTriangle(18, 0, 0, 35, 18, 28);
+    graphics.fillTriangle(4, 26, 14, 20, 9, 35);
+    graphics.fillTriangle(32, 26, 22, 20, 27, 35);
     graphics.fillStyle(colors.fill, 1);
-    graphics.fillTriangle(18, 5, 31, 32, 5, 32);
+    graphics.fillTriangle(18, 5, 30, 31, 18, 24);
+    graphics.fillTriangle(18, 5, 6, 31, 18, 24);
     graphics.fillStyle(colors.core, 0.95);
-    graphics.fillTriangle(18, 10, 24, 25, 12, 25);
+    graphics.fillTriangle(18, 9, 24, 25, 12, 25);
     graphics.lineStyle(2, colors.core, 0.6);
-    graphics.lineBetween(8, 30, 2, 34);
-    graphics.lineBetween(28, 30, 34, 34);
+    graphics.lineBetween(7, 31, 1, 35);
+    graphics.lineBetween(29, 31, 35, 35);
+    graphics.lineBetween(18, 8, 18, 27);
     graphics.generateTexture('enemy-runner', 36, 36);
     graphics.destroy();
   }
@@ -106,8 +127,17 @@ export class BootScene extends Phaser.Scene {
     const graphics = this.add.graphics();
     graphics.fillStyle(colors.stroke, 1);
     this.drawOctagon(graphics, 27, 27, 26);
+    graphics.fillRect(2, 20, 11, 14);
+    graphics.fillRect(41, 20, 11, 14);
+    graphics.fillRect(20, 2, 14, 11);
+    graphics.fillRect(20, 41, 14, 11);
     graphics.fillStyle(colors.fill, 1);
     this.drawOctagon(graphics, 27, 27, 21);
+    graphics.fillStyle(0x32255f, 1);
+    graphics.fillRect(7, 22, 8, 10);
+    graphics.fillRect(39, 22, 8, 10);
+    graphics.fillRect(22, 7, 10, 8);
+    graphics.fillRect(22, 39, 10, 8);
     graphics.fillStyle(colors.core, 0.9);
     graphics.fillCircle(27, 27, 9);
     graphics.lineStyle(3, colors.core, 0.62);
@@ -120,13 +150,21 @@ export class BootScene extends Phaser.Scene {
     const colors = ENEMY_COLORS.ranged;
     const graphics = this.add.graphics();
     graphics.fillStyle(colors.stroke, 1);
-    this.drawDiamond(graphics, 20, 2, 36);
+    graphics.fillRect(0, 16, 12, 8);
+    graphics.fillRect(28, 16, 12, 8);
+    graphics.fillTriangle(20, 0, 39, 20, 20, 40);
+    graphics.fillTriangle(20, 0, 1, 20, 20, 40);
     graphics.fillStyle(colors.fill, 1);
-    this.drawDiamond(graphics, 20, 6, 28);
+    this.drawDiamond(graphics, 20, 5, 30);
+    graphics.fillStyle(0x145545, 1);
+    graphics.fillRect(3, 18, 11, 4);
+    graphics.fillRect(26, 18, 11, 4);
     graphics.fillStyle(colors.core, 1);
-    graphics.fillCircle(20, 20, 6);
+    graphics.fillCircle(20, 20, 6.5);
     graphics.lineStyle(2, colors.core, 0.75);
     graphics.strokeCircle(20, 20, 11);
+    graphics.lineStyle(3, colors.core, 0.72);
+    graphics.lineBetween(20, 7, 20, 0);
     graphics.generateTexture('enemy-ranged', 40, 40);
     graphics.destroy();
   }
@@ -135,19 +173,48 @@ export class BootScene extends Phaser.Scene {
     const colors = ENEMY_COLORS.swarm;
     const graphics = this.add.graphics();
     graphics.fillStyle(colors.stroke, 1);
-    graphics.fillCircle(13, 13, 12);
+    graphics.beginPath();
+    graphics.moveTo(13, 0);
+    graphics.lineTo(18, 8);
+    graphics.lineTo(26, 10);
+    graphics.lineTo(19, 16);
+    graphics.lineTo(21, 25);
+    graphics.lineTo(13, 20);
+    graphics.lineTo(5, 25);
+    graphics.lineTo(7, 16);
+    graphics.lineTo(0, 10);
+    graphics.lineTo(8, 8);
+    graphics.closePath();
+    graphics.fillPath();
     graphics.fillStyle(colors.fill, 1);
-    graphics.fillCircle(13, 13, 9);
+    graphics.beginPath();
+    graphics.moveTo(13, 4);
+    graphics.lineTo(17, 10);
+    graphics.lineTo(22, 11);
+    graphics.lineTo(17, 15);
+    graphics.lineTo(18, 21);
+    graphics.lineTo(13, 17);
+    graphics.lineTo(8, 21);
+    graphics.lineTo(9, 15);
+    graphics.lineTo(4, 11);
+    graphics.lineTo(9, 10);
+    graphics.closePath();
+    graphics.fillPath();
     graphics.fillStyle(colors.core, 1);
-    graphics.fillCircle(13, 13, 3);
+    graphics.fillCircle(13, 13, 3.5);
     graphics.generateTexture('enemy-swarm', 26, 26);
     graphics.destroy();
   }
 
   private makeEliteRingTexture(): void {
     const graphics = this.add.graphics();
-    graphics.lineStyle(4, COLORS.elite, 0.9);
-    graphics.strokeCircle(34, 34, 30);
+    graphics.lineStyle(4, COLORS.elite, 0.92);
+    for (let i = 0; i < 4; i += 1) {
+      const start = i * Math.PI * 0.5 + 0.08;
+      graphics.beginPath();
+      graphics.arc(34, 34, 30, start, start + Math.PI * 0.34);
+      graphics.strokePath();
+    }
     graphics.lineStyle(2, 0xffffff, 0.75);
     for (let i = 0; i < 6; i += 1) {
       const angle = (Math.PI * 2 * i) / 6;
@@ -158,31 +225,56 @@ export class BootScene extends Phaser.Scene {
   }
 
   private makeBossTexture(): void {
-    this.makeGlowTexture('boss-glow', 170, COLORS.boss, 0.2);
+    this.makeGlowTexture('boss-glow', 190, COLORS.boss, 0.22);
     const size = 120;
     const graphics = this.add.graphics();
+    const center = size / 2;
+    graphics.fillStyle(0x1b153a, 1);
+    this.drawPolygon(graphics, center, center, [54, 42, 58, 42, 54, 42], Math.PI / 6);
     graphics.fillStyle(COLORS.bossShell, 1);
-    graphics.fillCircle(size / 2, size / 2, 56);
-    graphics.lineStyle(6, 0xfdf2a4, 0.75);
-    graphics.strokeCircle(size / 2, size / 2, 52);
-    graphics.fillStyle(0x24174d, 1);
-    graphics.fillCircle(size / 2, size / 2, 42);
-    graphics.fillStyle(COLORS.boss, 1);
-    graphics.fillCircle(size / 2, size / 2, 30);
-    graphics.fillStyle(0x2b204d, 1);
-    graphics.fillCircle(size / 2, size / 2, 12);
-    graphics.lineStyle(5, 0xfef3a2, 0.82);
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (Math.PI * 2 * i) / 8;
-      graphics.lineBetween(
-        size / 2 + Math.cos(angle) * 35,
-        size / 2 + Math.sin(angle) * 35,
-        size / 2 + Math.cos(angle) * 58,
-        size / 2 + Math.sin(angle) * 58,
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      const x = center + Math.cos(angle) * 40;
+      const y = center + Math.sin(angle) * 40;
+      graphics.fillTriangle(
+        center + Math.cos(angle - 0.18) * 29,
+        center + Math.sin(angle - 0.18) * 29,
+        x + Math.cos(angle + Math.PI / 2) * 12,
+        y + Math.sin(angle + Math.PI / 2) * 12,
+        x + Math.cos(angle - Math.PI / 2) * 12,
+        y + Math.sin(angle - Math.PI / 2) * 12,
       );
     }
+    graphics.lineStyle(5, 0xfdf2a4, 0.78);
+    graphics.strokeCircle(center, center, 49);
+    graphics.lineStyle(2, COLORS.boss, 0.55);
+    graphics.strokeCircle(center, center, 36);
+    graphics.fillStyle(0x24174d, 1);
+    graphics.fillCircle(center, center, 34);
+    graphics.fillStyle(COLORS.boss, 1);
+    this.drawPolygon(graphics, center, center, [24, 18, 24, 18, 24, 18], Math.PI / 6);
+    graphics.fillStyle(0xfff7b0, 1);
+    graphics.fillCircle(center, center, 13);
+    graphics.fillStyle(0x2b204d, 1);
+    graphics.fillCircle(center, center, 6);
     graphics.generateTexture('boss', size, size);
     graphics.destroy();
+
+    const ring = this.add.graphics();
+    ring.lineStyle(5, COLORS.boss, 0.78);
+    for (let i = 0; i < 6; i += 1) {
+      const start = (Math.PI * 2 * i) / 6 + 0.08;
+      ring.beginPath();
+      ring.arc(64, 64, 57, start, start + Math.PI * 0.28);
+      ring.strokePath();
+      const angle = start + Math.PI * 0.14;
+      ring.fillStyle(0xfdf2a4, 0.9);
+      ring.fillRect(64 + Math.cos(angle) * 53 - 4, 64 + Math.sin(angle) * 53 - 4, 8, 8);
+    }
+    ring.lineStyle(2, 0xffffff, 0.5);
+    ring.strokeCircle(64, 64, 45);
+    ring.generateTexture('boss-ring', 128, 128);
+    ring.destroy();
   }
 
   private makeSparkTextures(): void {
@@ -304,6 +396,20 @@ export class BootScene extends Phaser.Scene {
     graphics.destroy();
   }
 
+  private makeDangerProjectileTexture(): void {
+    const graphics = this.add.graphics();
+    graphics.fillStyle(COLORS.enemyProjectile, 1);
+    graphics.fillTriangle(17, 1, 32, 30, 17, 24);
+    graphics.fillTriangle(17, 1, 2, 30, 17, 24);
+    graphics.fillStyle(COLORS.enemyProjectileCore, 1);
+    graphics.fillTriangle(17, 7, 25, 25, 17, 20);
+    graphics.fillTriangle(17, 7, 9, 25, 17, 20);
+    graphics.lineStyle(2, 0xffffff, 0.62);
+    graphics.lineBetween(17, 3, 17, 27);
+    graphics.generateTexture('enemy-projectile', 34, 34);
+    graphics.destroy();
+  }
+
   private makeTrailTexture(key: string, size: number, color: number, alpha: number): void {
     const graphics = this.add.graphics();
     graphics.fillStyle(color, alpha);
@@ -346,6 +452,22 @@ export class BootScene extends Phaser.Scene {
         graphics.lineTo(x, y);
       }
     }
+    graphics.closePath();
+    graphics.fillPath();
+  }
+
+  private drawPolygon(graphics: Phaser.GameObjects.Graphics, centerX: number, centerY: number, radii: number[], rotation = 0): void {
+    graphics.beginPath();
+    radii.forEach((radius, index) => {
+      const angle = rotation + (Math.PI * 2 * index) / radii.length;
+      const x = centerX + Math.cos(angle) * radius;
+      const y = centerY + Math.sin(angle) * radius;
+      if (index === 0) {
+        graphics.moveTo(x, y);
+      } else {
+        graphics.lineTo(x, y);
+      }
+    });
     graphics.closePath();
     graphics.fillPath();
   }

@@ -54,48 +54,42 @@ export class MenuScene extends Phaser.Scene {
     const startY = Math.max(92, height * 0.16);
     this.addMenuBackdrop(width, height);
 
+    this.addLogo(centerX, startY, Math.min(58, Math.max(38, width * 0.06)));
     this.addNode(
       this.add
-        .text(centerX, startY, 'Evolve Arena', {
-          color: '#f7fbff',
-          fontSize: `${Math.min(52, Math.max(34, width * 0.055))}px`,
-          fontStyle: '900',
-          stroke: '#07131a',
-          strokeThickness: 7,
-        })
-        .setOrigin(0.5),
-    );
-    this.addNode(
-      this.add
-        .text(centerX, startY + 48, 'Collect XP. Build synergies. Beat the Apex Core.', {
+        .text(centerX, startY + 54, 'Collect XP. Build synergies. Beat the Apex Core.', {
           color: '#d7edff',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '17px',
+          fontStyle: '700',
           align: 'center',
           wordWrap: { width: Math.min(560, width - 40) },
         })
         .setOrigin(0.5),
     );
 
-    const playButton = this.createButton(centerX, startY + 106, Math.min(320, width - 42), 62, 'PLAY', () => {
+    const playButton = this.createButton(centerX, startY + 118, Math.min(340, width - 42), 64, 'PLAY', () => {
       this.scene.start('GameScene', { save: this.save });
     });
     this.addNode(playButton);
 
     this.addNode(
       this.add
-        .text(centerX, startY + 162, `Best ${this.save.bestScore}    Coins ${this.save.coins}`, {
+        .text(centerX, startY + 178, `Best ${this.save.bestScore}    Coins ${this.save.coins}`, {
           color: '#ffffff',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '18px',
           fontStyle: '800',
         })
         .setOrigin(0.5),
     );
 
-    const upgradeY = startY + 235;
+    const upgradeY = startY + 260;
     this.addNode(
       this.add
         .text(centerX, upgradeY - 44, 'Permanent Upgrades', {
           color: '#9ff7db',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '18px',
           fontStyle: '900',
         })
@@ -114,7 +108,9 @@ export class MenuScene extends Phaser.Scene {
       this.add
         .text(centerX, height - 34, 'WASD / Arrow Keys   |   Touch + drag to move', {
           color: '#b9c7dc',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '14px',
+          fontStyle: '700',
           align: 'center',
         })
         .setOrigin(0.5),
@@ -127,22 +123,14 @@ export class MenuScene extends Phaser.Scene {
     const rightX = width * 0.72;
     const panelWidth = Math.min(260, Math.max(220, width * 0.28));
 
-    this.addNode(
-      this.add
-        .text(leftX, 52, 'Evolve Arena', {
-          color: '#f7fbff',
-          fontSize: '34px',
-          fontStyle: '900',
-          stroke: '#07131a',
-          strokeThickness: 6,
-        })
-        .setOrigin(0.5),
-    );
+    this.addLogo(leftX, 52, 34);
     this.addNode(
       this.add
         .text(leftX, 92, 'Collect XP. Build synergies. Beat the Apex Core.', {
           color: '#d7edff',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '15px',
+          fontStyle: '700',
           align: 'center',
           wordWrap: { width: Math.min(360, width * 0.48) },
         })
@@ -157,6 +145,7 @@ export class MenuScene extends Phaser.Scene {
       this.add
         .text(leftX, 207, `Best ${this.save.bestScore}    Coins ${this.save.coins}`, {
           color: '#ffffff',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '16px',
           fontStyle: '800',
         })
@@ -167,6 +156,7 @@ export class MenuScene extends Phaser.Scene {
       this.add
         .text(rightX, 54, 'Permanent Upgrades', {
           color: '#9ff7db',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '17px',
           fontStyle: '900',
         })
@@ -181,7 +171,9 @@ export class MenuScene extends Phaser.Scene {
       this.add
         .text(leftX, height - 28, 'WASD / Arrow Keys   |   Touch + drag to move', {
           color: '#b9c7dc',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: '13px',
+          fontStyle: '700',
           align: 'center',
           wordWrap: { width: Math.min(390, width * 0.52) },
         })
@@ -208,6 +200,7 @@ export class MenuScene extends Phaser.Scene {
     const label = this.add
       .text(-width / 2 + 14, -height * 0.29, `${balance.name}  Lv ${level}/${balance.maxLevel}`, {
         color: '#ffffff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: height < 64 ? '14px' : '15px',
         fontStyle: '800',
       })
@@ -215,6 +208,7 @@ export class MenuScene extends Phaser.Scene {
     const effect = this.add
       .text(-width / 2 + 14, height < 66 ? 4 : 2, this.getPermanentUpgradeEffectText(id), {
         color: '#b9c7dc',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: height < 66 ? '11px' : '12px',
         fontStyle: '700',
       })
@@ -222,6 +216,7 @@ export class MenuScene extends Phaser.Scene {
     const value = this.add
       .text(-width / 2 + 14, height * 0.3, maxed ? 'MAXED' : `${cost} coins`, {
         color: maxed ? '#9ff7db' : '#d7edff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: height < 64 ? '13px' : '14px',
         fontStyle: '900',
       })
@@ -229,6 +224,7 @@ export class MenuScene extends Phaser.Scene {
     const action = this.add
       .text(width / 2 - 14, height * 0.3, maxed ? '' : affordable ? 'UPGRADE' : 'LOCKED', {
         color: affordable ? '#9ff7db' : '#7f8ba3',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: height < 66 ? '10px' : '11px',
         fontStyle: '900',
       })
@@ -262,6 +258,7 @@ export class MenuScene extends Phaser.Scene {
     const text = this.add
       .text(0, 0, label, {
         color: '#07131a',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '24px',
         fontStyle: '900',
       })
@@ -274,6 +271,36 @@ export class MenuScene extends Phaser.Scene {
     return this.add.container(x, y, [shadow, bg, shine, text]);
   }
 
+  private addLogo(x: number, y: number, size: number): void {
+    const glow = this.add
+      .text(x, y + 2, 'EVOLVE ARENA', {
+        color: '#63e7ff',
+        fontFamily: 'Arial Black, Arial, Helvetica, sans-serif',
+        fontSize: `${size}px`,
+        fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 9,
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.5);
+    const title = this.add
+      .text(x, y, 'EVOLVE ARENA', {
+        color: '#f7fbff',
+        fontFamily: 'Arial Black, Arial, Helvetica, sans-serif',
+        fontSize: `${size}px`,
+        fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 7,
+      })
+      .setOrigin(0.5);
+    const accent = this.add.rectangle(x, y + size * 0.66, Math.min(420, size * 7.1), 3, COLORS.playerProjectileCore, 0.86);
+    const core = this.add.image(x - Math.min(275, size * 4.55), y + 1, 'player').setScale(Math.max(0.38, size / 96)).setAlpha(0.95);
+    this.addNode(glow);
+    this.addNode(title);
+    this.addNode(accent);
+    this.addNode(core);
+  }
+
   private addNode<T extends Phaser.GameObjects.GameObject>(node: T): T {
     this.nodes.push(node);
     return node;
@@ -281,16 +308,36 @@ export class MenuScene extends Phaser.Scene {
 
   private addMenuBackdrop(width: number, height: number): void {
     this.addNode(this.add.rectangle(width / 2, height / 2, width, height, COLORS.backgroundDeep, 1));
-    this.addNode(this.add.circle(width * 0.24, height * 0.17, Math.min(260, width * 0.28), COLORS.playerGlow, 0.1));
-    this.addNode(this.add.circle(width * 0.82, height * 0.78, Math.min(320, width * 0.32), COLORS.bossShell, 0.12));
+    this.addNode(this.add.circle(width * 0.23, height * 0.22, Math.min(250, width * 0.24), COLORS.playerGlow, 0.08));
+    this.addNode(this.add.circle(width * 0.82, height * 0.72, Math.min(320, width * 0.28), COLORS.bossShell, 0.1));
     const grid = this.add.graphics();
-    grid.lineStyle(1, COLORS.arenaGrid, 0.18);
+    grid.lineStyle(1, COLORS.arenaGrid, 0.13);
     for (let x = 0; x <= width; x += 72) {
       grid.lineBetween(x, 0, x, height);
     }
     for (let y = 0; y <= height; y += 72) {
       grid.lineBetween(0, y, width, y);
     }
+    grid.lineStyle(4, COLORS.playerProjectileCore, 0.16);
+    for (let i = 0; i < 4; i += 1) {
+      const start = -Math.PI * 0.4 + i * Math.PI * 0.34;
+      grid.beginPath();
+      grid.arc(width * 0.22, height * 0.28, Math.min(210, width * 0.2), start, start + Math.PI * 0.22);
+      grid.strokePath();
+    }
+    grid.lineStyle(5, COLORS.boss, 0.13);
+    for (let i = 0; i < 5; i += 1) {
+      const start = Math.PI * 0.55 + i * Math.PI * 0.28;
+      grid.beginPath();
+      grid.arc(width * 0.83, height * 0.72, Math.min(270, width * 0.24), start, start + Math.PI * 0.18);
+      grid.strokePath();
+    }
+    grid.lineStyle(2, COLORS.arenaAccent, 0.18);
+    grid.lineBetween(width * 0.18, height * 0.32, width * 0.47, height * 0.58);
+    grid.lineBetween(width * 0.58, height * 0.42, width * 0.86, height * 0.66);
+    grid.fillStyle(COLORS.arenaMark, 0.16);
+    grid.fillCircle(width * 0.47, height * 0.58, 7);
+    grid.fillCircle(width * 0.58, height * 0.42, 6);
     this.addNode(grid);
   }
 

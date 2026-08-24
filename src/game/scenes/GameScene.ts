@@ -159,25 +159,45 @@ export class GameScene extends Phaser.Scene {
   private createWorld(): void {
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.graphics = this.add.graphics().setDepth(UI_DEPTH.world);
-    this.graphics.fillStyle(COLORS.arenaBase, 1);
+    this.graphics.fillStyle(COLORS.backgroundDeep, 1);
     this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.graphics.fillStyle(COLORS.backgroundDeep, 0.28);
-    this.graphics.fillCircle(WORLD.width * 0.22, WORLD.height * 0.18, 420);
-    this.graphics.fillCircle(WORLD.width * 0.82, WORLD.height * 0.72, 520);
-    this.graphics.lineStyle(1, COLORS.arenaGrid, 0.34);
+    this.graphics.fillStyle(COLORS.arenaBase, 0.86);
+    this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
+    this.graphics.fillStyle(COLORS.backgroundDeep, 0.38);
+    this.graphics.fillCircle(WORLD.width * 0.18, WORLD.height * 0.2, 520);
+    this.graphics.fillCircle(WORLD.width * 0.82, WORLD.height * 0.78, 620);
+    this.graphics.lineStyle(1, COLORS.arenaGrid, 0.16);
     for (let x = 0; x <= WORLD.width; x += WORLD.tileSize) {
       this.graphics.lineBetween(x, 0, x, WORLD.height);
     }
     for (let y = 0; y <= WORLD.height; y += WORLD.tileSize) {
       this.graphics.lineBetween(0, y, WORLD.width, y);
     }
-    this.graphics.lineStyle(2, COLORS.arenaAccent, 0.3);
-    for (let x = WORLD.tileSize / 2; x <= WORLD.width; x += WORLD.tileSize * 3) {
-      this.graphics.lineBetween(x, 0, x + WORLD.height * 0.25, WORLD.height);
+    this.graphics.lineStyle(2, COLORS.arenaAccent, 0.24);
+    for (let x = WORLD.tileSize; x <= WORLD.width; x += WORLD.tileSize * 4) {
+      this.graphics.lineBetween(x, WORLD.height * 0.16, x + WORLD.height * 0.18, WORLD.height * 0.84);
     }
-    this.graphics.lineStyle(3, COLORS.arenaMark, 0.18);
-    this.graphics.strokeCircle(WORLD.width / 2, WORLD.height / 2, 260);
-    this.graphics.strokeCircle(WORLD.width / 2, WORLD.height / 2, 520);
+    const centerX = WORLD.width / 2;
+    const centerY = WORLD.height / 2;
+    this.graphics.lineStyle(3, COLORS.arenaMark, 0.14);
+    this.graphics.strokeCircle(centerX, centerY, 260);
+    this.graphics.strokeCircle(centerX, centerY, 520);
+    this.graphics.lineStyle(2, COLORS.playerProjectileCore, 0.1);
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      this.graphics.lineBetween(
+        centerX + Math.cos(angle) * 300,
+        centerY + Math.sin(angle) * 300,
+        centerX + Math.cos(angle) * 620,
+        centerY + Math.sin(angle) * 620,
+      );
+      this.graphics.fillStyle(COLORS.arenaMark, 0.12);
+      this.graphics.fillCircle(centerX + Math.cos(angle) * 520, centerY + Math.sin(angle) * 520, 9);
+    }
+    this.graphics.lineStyle(4, COLORS.bossShell, 0.1);
+    this.graphics.strokeCircle(centerX, centerY, 150);
+    this.graphics.fillStyle(COLORS.arenaMark, 0.06);
+    this.graphics.fillCircle(centerX, centerY, 92);
   }
 
   private createGroups(): void {
@@ -555,6 +575,8 @@ export class GameScene extends Phaser.Scene {
 
   private killEnemy(enemy: Enemy, canExplode: boolean, explosionDepth: number): void {
     const data = enemy.dataModel;
+    const deathX = enemy.x;
+    const deathY = enemy.y;
     this.score += data.score;
     this.kills += 1;
     if (data.elite) {
@@ -564,15 +586,15 @@ export class GameScene extends Phaser.Scene {
       this.bossDefeated = true;
       this.analytics.track('boss_defeated');
     }
-    this.dropXp(enemy.x, enemy.y, data.xp);
-    this.createBurst(enemy.x, enemy.y, data.elite ? 0xfff5a8 : 0xffffff);
+    this.dropXp(deathX, deathY, data.xp);
+    this.createBurst(deathX, deathY, data.elite ? 0xfff5a8 : 0xffffff);
     enemy.destroy();
     this.audio.play('enemyDeath');
 
     if (canExplode && this.stats.explosionOnKill > 0) {
       this.explode(
-        enemy.x,
-        enemy.y,
+        deathX,
+        deathY,
         this.stats.explosionOnKill,
         this.stats.damage * (1.4 + this.stats.chainReaction * 0.25),
         explosionDepth,
@@ -581,7 +603,10 @@ export class GameScene extends Phaser.Scene {
 
     if (data.type === 'boss') {
       this.cameras.main.shake(360, 0.012);
-      this.createBurst(enemy.x, enemy.y, COLORS.boss, 18, 'gold-spark');
+      const pulse = this.add.circle(deathX, deathY, 90, COLORS.boss, 0.28).setDepth(UI_DEPTH.effects);
+      pulse.setStrokeStyle(4, 0xffffff, 0.72);
+      this.tweens.add({ targets: pulse, scale: 2.1, alpha: 0, duration: 520, ease: 'Sine.Out', onComplete: () => pulse.destroy() });
+      this.createBurst(deathX, deathY, COLORS.boss, 18, 'gold-spark');
       this.finishRun(true);
     }
   }
@@ -742,19 +767,49 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private spawnBoss(time: number): void {
+  private spawnBoss(_time: number): void {
     this.bossSpawned = true;
     this.clearArenaForBossEntrance();
-    const spawn = this.pickSpawnPoint();
+    this.showBossWarning();
+    this.cameras.main.flash(180, 255, 238, 88, false);
+    this.time.delayedCall(940, () => this.createBossEntity(this.time.now));
+    this.cameras.main.shake(260, 0.006);
+    this.audio.play('bossSpawn');
+    this.analytics.track('boss_reached');
+  }
+
+  private createBossEntity(time: number): void {
+    if (this.mode !== 'playing' || this.bossDefeated || this.boss?.active) {
+      return;
+    }
+    const spawn = this.pickBossEntrancePoint();
     this.boss = new Enemy(this, spawn.x, spawn.y, ENEMY_DEFINITIONS.boss, false, 1);
     this.enemies.add(this.boss);
+    this.boss.setAlpha(0.15).setScale(0.82);
+    this.tweens.add({ targets: this.boss, alpha: 1, scale: 1, duration: 260, ease: 'Back.Out' });
+    this.createSpawnFlash(this.boss.x, this.boss.y, COLORS.boss, 92);
     this.bossBar.show();
     this.nextBossChargeAt = time + 2500;
     this.nextBossRadialAt = time + 4200;
-    this.cameras.main.shake(500, 0.008);
-    this.showBossWarning();
-    this.audio.play('bossSpawn');
-    this.analytics.track('boss_reached');
+  }
+
+  private pickBossEntrancePoint(): Phaser.Math.Vector2 {
+    const camera = this.cameras.main;
+    const shortLandscape = camera.width > camera.height && camera.height < 520;
+    let x = camera.scrollX + camera.width * (shortLandscape ? 0.78 : 0.68);
+    let y = camera.scrollY + camera.height * (shortLandscape ? 0.44 : 0.28);
+    x = Phaser.Math.Clamp(x, camera.scrollX + 84, camera.scrollX + camera.width - 84);
+    y = Phaser.Math.Clamp(y, camera.scrollY + 84, camera.scrollY + camera.height - 84);
+
+    if (Phaser.Math.Distance.Squared(x, y, this.player.x, this.player.y) < 260 * 260) {
+      x = this.player.x > camera.scrollX + camera.width / 2 ? camera.scrollX + 108 : camera.scrollX + camera.width - 108;
+      y = camera.scrollY + camera.height * 0.42;
+    }
+
+    return new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(x, 90, WORLD.width - 90),
+      Phaser.Math.Clamp(y, 90, WORLD.height - 90),
+    );
   }
 
   private clearArenaForBossEntrance(): void {
@@ -943,20 +998,22 @@ export class GameScene extends Phaser.Scene {
 
   private showBossWarning(): void {
     const shortLandscape = this.scale.width > this.scale.height && this.scale.height < 520;
-    const width = Math.min(this.scale.width - 48, 520);
-    const y = shortLandscape ? 154 : this.scale.height * 0.18;
-    const banner = this.add.rectangle(this.scale.width / 2, y, width, shortLandscape ? 34 : 44, COLORS.bossDanger, 0.18);
+    const width = Math.min(this.scale.width - 48, 480);
+    const y = shortLandscape ? this.scale.height * 0.52 : Math.min(this.scale.height * 0.32, 230);
+    const banner = this.add.rectangle(this.scale.width / 2, y, width, shortLandscape ? 38 : 48, COLORS.bossDanger, 0.2);
+    banner.setStrokeStyle(2, COLORS.boss, 0.5);
     const text = this.add
       .text(this.scale.width / 2, y, 'BOSS INCOMING', {
         color: '#fff5a8',
-        fontSize: this.scale.width < 520 || shortLandscape ? '18px' : '22px',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: this.scale.width < 520 || shortLandscape ? '18px' : '24px',
         fontStyle: '900',
         stroke: '#07131a',
         strokeThickness: 5,
       })
       .setOrigin(0.5);
     [banner, text].forEach((item) => item.setScrollFactor(0).setDepth(UI_DEPTH.hud + 5));
-    this.tweens.add({ targets: [banner, text], alpha: 0, delay: 760, duration: 320, onComplete: () => {
+    this.tweens.add({ targets: [banner, text], alpha: 0, delay: 620, duration: 220, onComplete: () => {
       banner.destroy();
       text.destroy();
     } });

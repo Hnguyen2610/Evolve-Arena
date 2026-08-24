@@ -5,6 +5,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   dataModel: EnemyRuntimeData;
   private readonly eliteRing?: Phaser.GameObjects.Image;
   private readonly glow?: Phaser.GameObjects.Image;
+  private readonly bossRing?: Phaser.GameObjects.Image;
 
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
     super(scene, x, y, definition.type === 'boss' ? 'boss' : `enemy-${definition.type}`);
@@ -33,6 +34,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setScale(elite ? 1.28 : 1);
     if (definition.type === 'boss') {
       this.glow = scene.add.image(x, y, 'boss-glow').setDepth(7).setAlpha(0.42);
+      this.bossRing = scene.add.image(x, y, 'boss-ring').setDepth(8).setAlpha(0.9);
     } else if (elite) {
       this.eliteRing = scene.add.image(x, y, 'elite-ring').setDepth(7).setAlpha(0.92).setScale(0.78);
     }
@@ -46,13 +48,31 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.eliteRing.setPosition(this.x, this.y).setRotation(-time / 520).setScale(this.scale * 0.84);
     }
     if (this.glow) {
-      this.glow.setPosition(this.x, this.y).setScale(this.scale * (1.02 + Math.sin(time / 240) * 0.035));
+      this.glow.setPosition(this.x, this.y).setScale(this.scale * (1.04 + Math.sin(time / 240) * 0.04)).setVisible(this.active);
     }
+    if (this.bossRing) {
+      const charging = this.dataModel.telegraphUntil > time || this.dataModel.chargeUntil > time;
+      this.bossRing
+        .setPosition(this.x, this.y)
+        .setRotation(time / (charging ? 260 : 720))
+        .setScale(this.scale * (1.02 + Math.sin(time / 190) * (charging ? 0.035 : 0.018)))
+        .setAlpha(charging ? 1 : 0.86)
+        .setVisible(this.active);
+    }
+  }
+
+  disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {
+    super.disableBody(disableGameObject, hideGameObject);
+    this.eliteRing?.setVisible(false);
+    this.glow?.setVisible(false);
+    this.bossRing?.setVisible(false);
+    return this;
   }
 
   destroy(fromScene?: boolean): void {
     this.eliteRing?.destroy();
     this.glow?.destroy();
+    this.bossRing?.destroy();
     super.destroy(fromScene);
   }
 }

@@ -50,7 +50,7 @@ export class HUD {
   showHint(text: string): void {
     this.hintText.setText(text).setAlpha(1).setScale(0.96);
     this.scene.tweens.add({ targets: this.hintText, scale: 1, duration: 120, ease: 'Back.Out' });
-    this.scene.tweens.add({ targets: this.hintText, alpha: 0, delay: 1800, duration: 650 });
+    this.scene.tweens.add({ targets: this.hintText, alpha: 0, delay: 3600, duration: 850 });
   }
 
   destroy(): void {
@@ -68,6 +68,7 @@ export class HUD {
     this.levelBadge = this.scene.add
       .text(26, 22, 'LV 1', {
         color: COLORS.uiText,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '18px',
         fontStyle: '900',
         stroke: '#07131a',
@@ -77,6 +78,7 @@ export class HUD {
     this.scoreText = this.scene.add
       .text(92, 58, '', {
         color: COLORS.uiText,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '14px',
         fontStyle: '700',
         stroke: '#07131a',
@@ -86,6 +88,7 @@ export class HUD {
     this.timeText = this.scene.add
       .text(0, 22, '', {
         color: cssColor(COLORS.xpBar),
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '18px',
         fontStyle: '900',
         stroke: '#07131a',
@@ -96,6 +99,7 @@ export class HUD {
     this.hintText = this.scene.add
       .text(0, 0, '', {
         color: COLORS.uiText,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '18px',
         fontStyle: '800',
         align: 'center',

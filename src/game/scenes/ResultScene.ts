@@ -52,6 +52,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(centerX, panelY - panelHeight * 0.37, title, {
         color: titleColor,
+        fontFamily: 'Arial Black, Arial, Helvetica, sans-serif',
         fontSize: `${shortLandscape ? 32 : Math.min(54, Math.max(36, width * 0.06))}px`,
         fontStyle: '900',
         stroke: '#07131a',
@@ -64,6 +65,7 @@ export class ResultScene extends Phaser.Scene {
       this.add
         .text(centerX, panelY - panelHeight * 0.24, 'NEW BEST!', {
           color: '#9ff7db',
+          fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '15px' : '17px',
           fontStyle: '900',
         })
@@ -75,6 +77,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(centerX, scoreY, `${this.result.score}`, {
         color: '#f7fbff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: shortLandscape ? '34px' : '46px',
         fontStyle: '900',
         stroke: '#07131a',
@@ -85,6 +88,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(centerX, scoreY + (shortLandscape ? 34 : 46), `Best ${this.save.bestScore}   Coins +${this.result.coinsEarned}   Total ${this.save.coins}`, {
         color: '#dfe9ff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: shortLandscape ? '14px' : '16px',
         fontStyle: '800',
         align: 'center',
@@ -96,6 +100,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(centerX, scoreY + (shortLandscape ? 62 : 78), stats, {
         color: COLORS.uiTextMuted,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: shortLandscape ? '13px' : '15px',
         fontStyle: '700',
         align: 'center',
@@ -135,6 +140,13 @@ export class ResultScene extends Phaser.Scene {
     for (let y = 0; y <= height; y += 84) {
       grid.lineBetween(0, y, width, y);
     }
+    grid.lineStyle(4, this.result.victory ? COLORS.boss : COLORS.playerProjectileCore, 0.16);
+    for (let i = 0; i < 5; i += 1) {
+      const start = i * Math.PI * 0.28;
+      grid.beginPath();
+      grid.arc(width * 0.5, height * 0.5, Math.min(width, height) * 0.42, start, start + Math.PI * 0.16);
+      grid.strokePath();
+    }
   }
 
   private createButton(
@@ -154,6 +166,7 @@ export class ResultScene extends Phaser.Scene {
     this.add
       .text(x, y, label, {
         color: textColor,
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: height < 56 ? '17px' : '20px',
         fontStyle: '900',
       })
