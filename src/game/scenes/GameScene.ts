@@ -170,7 +170,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(
       this.xpOrbs,
       this.player,
-      (orb) => this.collectXp(orb),
+      (first, second) => this.collectXp(first, second),
       undefined,
       this,
     );
@@ -211,8 +211,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     const difficulty = getDifficulty(this.elapsedSeconds, this.level);
-    this.nextSpawnAt = time + difficulty.spawnIntervalMs;
-    if (this.enemies.countActive(true) >= difficulty.maxEnemies) {
+    const bossPhase = this.bossSpawned && !this.bossDefeated;
+    if (bossPhase) {
+      this.nextSpawnAt = time + difficulty.spawnIntervalMs;
+      return;
+    }
+    this.nextSpawnAt = time + difficulty.spawnIntervalMs * (bossPhase ? 1.9 : 1);
+    const maxEnemies = difficulty.maxEnemies;
+    if (this.enemies.countActive(true) >= maxEnemies) {
       return;
     }
 
@@ -351,6 +357,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private findTarget(): Enemy | null {
+    if (this.boss?.active) {
+      const bossDistance = Phaser.Math.Distance.Squared(this.player.x, this.player.y, this.boss.x, this.boss.y);
+      if (bossDistance <= this.stats.attackRange * this.stats.attackRange * 1.35) {
+        return this.boss;
+      }
+    }
+
     let target: Enemy | null = null;
     let bestDistance = this.stats.attackRange * this.stats.attackRange;
     this.enemies.getChildren().forEach((gameObject) => {
@@ -413,8 +426,11 @@ export class GameScene extends Phaser.Scene {
     projectileObject: unknown,
     enemyObject: unknown,
   ): void {
-    const projectile = projectileObject as Projectile;
-    const enemy = enemyObject as Enemy;
+    const projectile = this.asProjectile(projectileObject) ?? this.asProjectile(enemyObject);
+    const enemy = this.asEnemy(projectileObject) ?? this.asEnemy(enemyObject);
+    if (!projectile || !enemy) {
+      return;
+    }
     if (!projectile.active || !enemy.active) {
       return;
     }
@@ -431,7 +447,10 @@ export class GameScene extends Phaser.Scene {
     _playerObject: unknown,
     projectileObject: unknown,
   ): void {
-    const projectile = projectileObject as Projectile;
+    const projectile = this.asProjectile(projectileObject) ?? this.asProjectile(_playerObject);
+    if (!projectile) {
+      return;
+    }
     if (!projectile.active) {
       return;
     }
@@ -522,7 +541,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const distanceSq = Phaser.Math.Distance.Squared(orb.x, orb.y, this.player.x, this.player.y);
-      if (distanceSq < this.stats.magnetRange * this.stats.magnetRange) {
+      if (distanceSq < this.stats.magnetRange * this.stats.magnetRange || this.time.now - orb.xpData.spawnedAt > 1100) {
         orb.xpData.attracted = true;
       }
       if (orb.xpData.attracted) {
@@ -536,8 +555,11 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private collectXp(orbObject: unknown): void {
-    const orb = orbObject as ExperienceOrb;
+  private collectXp(firstObject: unknown, secondObject: unknown): void {
+    const orb = this.asXpOrb(firstObject) ?? this.asXpOrb(secondObject);
+    if (!orb) {
+      return;
+    }
     if (!orb.active) {
       return;
     }
@@ -550,6 +572,28 @@ export class GameScene extends Phaser.Scene {
       this.analytics.track('player_level', { level: this.level });
       this.openUpgradeSelection();
     }
+  }
+
+  private asProjectile(value: unknown): Projectile | null {
+    const gameObject = this.unwrapArcadeGameObject(value);
+    return gameObject instanceof Projectile ? gameObject : null;
+  }
+
+  private asEnemy(value: unknown): Enemy | null {
+    const gameObject = this.unwrapArcadeGameObject(value);
+    return gameObject instanceof Enemy ? gameObject : null;
+  }
+
+  private asXpOrb(value: unknown): ExperienceOrb | null {
+    const gameObject = this.unwrapArcadeGameObject(value);
+    return gameObject instanceof ExperienceOrb ? gameObject : null;
+  }
+
+  private unwrapArcadeGameObject(value: unknown): unknown {
+    if (value instanceof Phaser.Physics.Arcade.Body || value instanceof Phaser.Physics.Arcade.StaticBody) {
+      return value.gameObject;
+    }
+    return value;
   }
 
   private openUpgradeSelection(): void {
@@ -596,6 +640,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnBoss(time: number): void {
     this.bossSpawned = true;
+    this.clearArenaForBossEntrance();
     const spawn = this.pickSpawnPoint();
     this.boss = new Enemy(this, spawn.x, spawn.y, ENEMY_DEFINITIONS.boss, false, 1);
     this.enemies.add(this.boss);
@@ -606,6 +651,23 @@ export class GameScene extends Phaser.Scene {
     this.hud.showHint('Boss incoming');
     this.audio.play('bossSpawn');
     this.analytics.track('boss_reached');
+  }
+
+  private clearArenaForBossEntrance(): void {
+    this.stats.currentHealth = this.stats.maxHealth;
+    this.enemies.getChildren().forEach((gameObject) => {
+      const enemy = gameObject as Enemy;
+      if (enemy.active && enemy.dataModel.type !== 'boss') {
+        this.createBurst(enemy.x, enemy.y, 0xfff5a8);
+        enemy.destroy();
+      }
+    });
+    this.enemyProjectiles.getChildren().forEach((gameObject) => {
+      const projectile = gameObject as Projectile;
+      if (projectile.active) {
+        projectile.disableBody(true, true);
+      }
+    });
   }
 
   private updateBoss(time: number): void {
@@ -679,9 +741,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.boss) {
       return;
     }
-    for (let i = 0; i < 16; i += 1) {
-      const angle = (Math.PI * 2 * i) / 16;
-      this.fireEnemyProjectile(this.boss.x, this.boss.y, angle, 275, this.boss.dataModel.damage * 0.8);
+    const projectileCount = 12;
+    for (let i = 0; i < projectileCount; i += 1) {
+      const angle = (Math.PI * 2 * i) / projectileCount;
+      this.fireEnemyProjectile(this.boss.x, this.boss.y, angle, 245, this.boss.dataModel.damage * 0.72);
     }
   }
 

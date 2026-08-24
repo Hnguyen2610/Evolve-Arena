@@ -6,7 +6,7 @@ export class ExperienceOrb extends Phaser.Physics.Arcade.Sprite {
 
   constructor(scene: Phaser.Scene) {
     super(scene, -200, -200, 'xp-orb');
-    this.xpData = { value: 0, attracted: false };
+    this.xpData = { value: 0, attracted: false, spawnedAt: 0 };
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setDepth(7);
@@ -15,7 +15,7 @@ export class ExperienceOrb extends Phaser.Physics.Arcade.Sprite {
   }
 
   drop(x: number, y: number, value: number): void {
-    this.xpData = { value, attracted: false };
+    this.xpData = { value, attracted: false, spawnedAt: this.scene.time.now };
     this.enableBody(true, x, y, true, true);
     this.setVelocity(Phaser.Math.Between(-70, 70), Phaser.Math.Between(-70, 70));
   }

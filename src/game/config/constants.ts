@@ -8,7 +8,7 @@ export const WORLD = {
 };
 
 export const GAME_TIMING = {
-  bossSpawnSeconds: 90,
+  bossSpawnSeconds: 85,
   runSoftLimitSeconds: 120,
   contactDamageCooldownMs: 650,
   rangedCooldownMs: 1800,

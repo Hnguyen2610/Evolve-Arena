@@ -5,13 +5,13 @@ import type { UpgradeDefinition } from '../types';
 export class UpgradeUI {
   private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
+  private readonly cards: Phaser.GameObjects.Container[] = [];
 
   constructor(scene: Phaser.Scene, options: UpgradeDefinition[], onPick: (upgrade: UpgradeDefinition) => void) {
     this.scene = scene;
     const blocker = scene.add
       .rectangle(0, 0, scene.scale.width, scene.scale.height, 0x050710, 0.78)
-      .setOrigin(0)
-      .setInteractive();
+      .setOrigin(0);
     const title = scene.add
       .text(scene.scale.width / 2, 0, 'Choose an Evolution', {
         color: '#ffffff',
@@ -21,7 +21,9 @@ export class UpgradeUI {
       })
       .setOrigin(0.5);
     this.container = scene.add.container(0, 0, [blocker, title]).setScrollFactor(0).setDepth(UI_DEPTH.overlay);
-    options.forEach((option, index) => this.container.add(this.createCard(option, index, onPick)));
+    options.forEach((option, index) => {
+      this.cards.push(this.createCard(option, index, onPick).setScrollFactor(0).setDepth(UI_DEPTH.overlay + 1));
+    });
     scene.scale.on('resize', this.layout, this);
     this.layout();
   }
@@ -29,6 +31,7 @@ export class UpgradeUI {
   destroy(): void {
     this.scene.scale.off('resize', this.layout, this);
     this.container.destroy();
+    this.cards.forEach((card) => card.destroy());
   }
 
   private createCard(
@@ -64,10 +67,14 @@ export class UpgradeUI {
       .setOrigin(0.5);
     const container = this.scene.add.container(0, 0, [card, name, description, rarity]);
     container.setData('index', index);
-    card.setInteractive({ useHandCursor: true });
-    card.on('pointerover', () => this.scene.tweens.add({ targets: container, scale: 1.04, duration: 90 }));
-    card.on('pointerout', () => this.scene.tweens.add({ targets: container, scale: 1, duration: 90 }));
-    card.on('pointerup', () => onPick(option));
+    container.setSize(240, 170);
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(-120, -85, 240, 170),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    container.on('pointerover', () => this.scene.tweens.add({ targets: container, scale: 1.04, duration: 90 }));
+    container.on('pointerout', () => this.scene.tweens.add({ targets: container, scale: 1, duration: 90 }));
+    container.on('pointerup', () => onPick(option));
     return container;
   }
 
@@ -79,9 +86,8 @@ export class UpgradeUI {
     blocker.setSize(width, height);
     title.setPosition(width / 2, Math.max(64, height * 0.17));
 
-    const cards = this.container.list.slice(2) as Phaser.GameObjects.Container[];
     const compact = width < 720;
-    cards.forEach((card, index) => {
+    this.cards.forEach((card, index) => {
       if (compact) {
         card.setPosition(width / 2, Math.max(155, height * 0.28) + index * 188).setScale(Math.min(1, (width - 56) / 260));
       } else {

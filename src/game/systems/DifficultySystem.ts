@@ -27,8 +27,8 @@ export function getDifficulty(elapsedSeconds: number, playerLevel: number): Diff
   }
 
   return {
-    spawnIntervalMs: Math.max(260, 940 - t * 7 - playerLevel * 14),
-    maxEnemies: Math.min(105, 18 + Math.floor(t / 4) + playerLevel * 2),
+    spawnIntervalMs: Math.max(520, 1650 - t * 3.6 - playerLevel * 5),
+    maxEnemies: Math.min(52, 7 + Math.floor(t / 8) + playerLevel),
     enemyTypes,
     eliteChance: t < 70 ? 0 : Math.min(0.2, 0.04 + (t - 70) * 0.003 + levelPressure),
     swarmPackSize: t >= 58 ? Math.min(8, 3 + Math.floor((t - 58) / 12)) : 1,

@@ -70,6 +70,7 @@ export interface ProjectileData {
 export interface XpOrbData {
   value: number;
   attracted: boolean;
+  spawnedAt: number;
 }
 
 export interface UpgradeDefinition {

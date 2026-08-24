@@ -31,13 +31,14 @@ export class ResultScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     const centerX = width / 2;
+    const shortLandscape = width > height && height < 520;
     const title = this.result.victory ? 'Victory' : 'Run Complete';
     const color = this.result.victory ? '#fff5a8' : '#ffffff';
 
     this.add
-      .text(centerX, Math.max(90, height * 0.16), title, {
+      .text(centerX, shortLandscape ? 54 : Math.max(90, height * 0.16), title, {
         color,
-        fontSize: `${Math.min(52, Math.max(34, width * 0.055))}px`,
+        fontSize: `${shortLandscape ? 32 : Math.min(52, Math.max(34, width * 0.055))}px`,
         fontStyle: '900',
       })
       .setOrigin(0.5);
@@ -50,21 +51,32 @@ export class ResultScene extends Phaser.Scene {
       `Level ${this.result.playerLevel}   Time ${Math.floor(this.result.survivalSeconds)}s`,
     ];
     this.add
-      .text(centerX, height * 0.38, lines.join('\n'), {
+      .text(centerX, shortLandscape ? height * 0.43 : height * 0.38, lines.join('\n'), {
         color: '#dfe9ff',
-        fontSize: '20px',
+        fontSize: shortLandscape ? '16px' : '20px',
         fontStyle: '700',
         align: 'center',
-        lineSpacing: 10,
+        lineSpacing: shortLandscape ? 4 : 10,
       })
       .setOrigin(0.5);
 
-    this.createButton(centerX, height * 0.68, Math.min(300, width - 42), 58, 'Replay', () => {
-      this.scene.start('GameScene', { save: this.save });
-    });
-    this.createButton(centerX, height * 0.8, Math.min(300, width - 42), 50, 'Upgrades', () => {
-      this.scene.start('MenuScene');
-    });
+    if (shortLandscape) {
+      const buttonWidth = Math.min(250, width * 0.34);
+      const buttonY = height - 46;
+      this.createButton(centerX - buttonWidth * 0.58, buttonY, buttonWidth, 50, 'Replay', () => {
+        this.scene.start('GameScene', { save: this.save });
+      });
+      this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'Upgrades', () => {
+        this.scene.start('MenuScene');
+      });
+    } else {
+      this.createButton(centerX, height * 0.68, Math.min(300, width - 42), 58, 'Replay', () => {
+        this.scene.start('GameScene', { save: this.save });
+      });
+      this.createButton(centerX, height * 0.8, Math.min(300, width - 42), 50, 'Upgrades', () => {
+        this.scene.start('MenuScene');
+      });
+    }
   }
 
   private createButton(

@@ -1,19 +1,19 @@
 import type { PermanentUpgradeState, PlayerStats } from '../types';
 
 export const BASE_PLAYER_STATS: PlayerStats = {
-  maxHealth: 120,
-  currentHealth: 120,
-  movementSpeed: 245,
-  damage: 18,
-  attackSpeed: 1.35,
-  attackRange: 390,
+  maxHealth: 260,
+  currentHealth: 260,
+  movementSpeed: 255,
+  damage: 24,
+  attackSpeed: 1.58,
+  attackRange: 430,
   projectileSpeed: 620,
   projectileCount: 1,
   projectileSize: 1,
   criticalChance: 0.06,
   criticalDamage: 1.8,
-  magnetRange: 135,
-  armor: 0,
+  magnetRange: 260,
+  armor: 4,
   lifesteal: 0,
   knockback: 80,
   piercing: 0,
@@ -23,7 +23,7 @@ export const BASE_PLAYER_STATS: PlayerStats = {
 };
 
 export const XP_BALANCE = {
-  baseXp: 18,
+  baseXp: 54,
   growthFactor: 1.42,
 };
 
