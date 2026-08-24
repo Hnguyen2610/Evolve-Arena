@@ -11,8 +11,9 @@ import { DesktopInput } from '../input/DesktopInput';
 import { TouchInput } from '../input/TouchInput';
 import { MemoryAnalyticsService } from '../services/AnalyticsService';
 import { BrowserAudioService } from '../services/AudioService';
-import { cloneDefaultSave } from '../services/StorageService';
-import { LocalYouTubePlayablesService } from '../services/YouTubePlayablesService';
+import { gameStorage, platform } from '../services/PlatformServices';
+import { cloneDefaultSave, saveBestEffort } from '../services/StorageService';
+import type { Unsubscribe } from '../services/YouTubePlayablesService';
 import { BossHealthBar } from '../ui/BossHealthBar';
 import { HUD } from '../ui/HUD';
 import { UpgradeUI } from '../ui/UpgradeUI';
@@ -52,7 +53,7 @@ export class GameScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private audio = new BrowserAudioService();
   private analytics = new MemoryAnalyticsService();
-  private youtube = new LocalYouTubePlayablesService();
+  private platformUnsubscribers: Unsubscribe[] = [];
   private upgrades: UpgradeState = {};
   private level = 1;
   private xp = 0;
@@ -74,6 +75,7 @@ export class GameScene extends Phaser.Scene {
   private bossRadialRing: Phaser.GameObjects.Arc | null = null;
   private bossRecoverUntil = 0;
   private lifecyclePaused = false;
+  private platformPaused = false;
   private pendingUpgradeChoices = 0;
   private nextMoveSparkAt = 0;
 
@@ -102,9 +104,7 @@ export class GameScene extends Phaser.Scene {
     this.registerAudioUnlock();
     this.hud.showHint('Move to survive. Attacks are automatic.');
     this.analytics.track('game_started');
-    void this.youtube.initialize();
-    this.youtube.signalFirstFrame();
-    this.youtube.signalGameReady();
+    void platform.initialize();
   }
 
   private resetRunState(): void {
@@ -130,6 +130,7 @@ export class GameScene extends Phaser.Scene {
     this.bossRadialRing = null;
     this.bossRecoverUntil = 0;
     this.lifecyclePaused = false;
+    this.platformPaused = false;
     this.upgradeUi = null;
     this.pendingUpgradeChoices = 0;
     this.nextMoveSparkAt = 0;
@@ -242,28 +243,48 @@ export class GameScene extends Phaser.Scene {
   }
 
   private registerLifecycle(): void {
-    this.youtube.onPause(() => {
-      if (this.mode === 'playing') {
-        this.lifecyclePaused = true;
-        this.physics.world.pause();
-        this.audio.pause();
-      }
-    });
-    this.youtube.onResume(() => {
-      if (this.lifecyclePaused) {
-        this.lifecyclePaused = false;
-        this.physics.world.resume();
-        this.audio.resume();
-      }
-    });
+    this.platformUnsubscribers = [
+      platform.onPause(() => this.handlePlatformPause()),
+      platform.onResume(() => this.handlePlatformResume()),
+      platform.onAudioEnabledChange((enabled) => this.audio.setPlatformAudioEnabled(enabled)),
+    ];
+    this.audio.setPlatformAudioEnabled(platform.isAudioEnabled());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.off('pointerdown', this.unlockAudio, this);
       this.input.keyboard?.off('keydown', this.unlockAudio, this);
+      this.platformUnsubscribers.forEach((unsubscribe) => unsubscribe());
+      this.platformUnsubscribers = [];
       this.touchInput.destroy();
       this.hud.destroy();
       this.bossBar.destroy();
-      this.youtube.dispose();
     });
+  }
+
+  private handlePlatformPause(): void {
+    if (this.platformPaused) {
+      return;
+    }
+    this.platformPaused = true;
+    this.lifecyclePaused = true;
+    this.physics.world.pause();
+    this.tweens.pauseAll();
+    this.input.enabled = false;
+    this.audio.pause();
+    void saveBestEffort(gameStorage, this.save);
+  }
+
+  private handlePlatformResume(): void {
+    if (!this.platformPaused) {
+      return;
+    }
+    this.platformPaused = false;
+    this.lifecyclePaused = false;
+    this.input.enabled = true;
+    this.tweens.resumeAll();
+    this.audio.resume();
+    if (this.mode === 'playing') {
+      this.physics.world.resume();
+    }
   }
 
   private registerAudioUnlock(): void {
@@ -1050,7 +1071,6 @@ export class GameScene extends Phaser.Scene {
       coinsEarned: calculateCoins(finalScore, this.kills, victory, this.bossDefeated),
       playerLevel: this.level,
     };
-    this.youtube.sendScore(finalScore);
     this.time.delayedCall(650, () => {
       this.physics.world.resume();
       this.scene.start('ResultScene', { save: this.save, result });

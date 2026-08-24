@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
-import { LocalStorageGameStorage, saveBestEffort } from '../services/StorageService';
+import { gameStorage, platform } from '../services/PlatformServices';
+import { saveBestEffort } from '../services/StorageService';
 import type { GameSaveData, RunResult } from '../types';
 
 interface ResultSceneData {
@@ -9,7 +10,6 @@ interface ResultSceneData {
 }
 
 export class ResultScene extends Phaser.Scene {
-  private storage = new LocalStorageGameStorage();
   private save!: GameSaveData;
   private result!: RunResult;
 
@@ -31,7 +31,10 @@ export class ResultScene extends Phaser.Scene {
       bestScore: Math.max(this.save.bestScore, this.result.score),
       coins: this.save.coins + this.result.coinsEarned,
     };
-    await saveBestEffort(this.storage, this.save);
+    await saveBestEffort(gameStorage, this.save);
+    if (newBest) {
+      void platform.sendScore(this.save.bestScore);
+    }
 
     const { width, height } = this.scale;
     const centerX = width / 2;

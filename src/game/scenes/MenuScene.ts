@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
 import { COLORS } from '../config/visual';
 import { buyPermanentUpgrade, getPermanentUpgradeCost } from '../systems/ProgressionSystem';
-import { LocalStorageGameStorage, loadSaveOrDefault, saveBestEffort } from '../services/StorageService';
+import { gameStorage, platform } from '../services/PlatformServices';
+import { loadSaveOrDefault, saveBestEffort } from '../services/StorageService';
 import type { GameSaveData, PermanentUpgradeId } from '../types';
 
 export class MenuScene extends Phaser.Scene {
-  private storage = new LocalStorageGameStorage();
   private save!: GameSaveData;
   private nodes: Phaser.GameObjects.GameObject[] = [];
   private isShutdown = true;
@@ -19,11 +19,14 @@ export class MenuScene extends Phaser.Scene {
     this.isShutdown = false;
     this.scale.on('resize', this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
-    this.save = await loadSaveOrDefault(this.storage);
+    await platform.initialize();
+    this.save = await loadSaveOrDefault(gameStorage);
     if (this.isShutdown) {
       return;
     }
     this.render();
+    platform.signalFirstFrameReady();
+    platform.signalGameReady();
   }
 
   private handleResize(): void {
@@ -235,7 +238,7 @@ export class MenuScene extends Phaser.Scene {
       bg.on('pointerup', async () => {
         const nextSave = buyPermanentUpgrade(this.save, id);
         this.save = nextSave;
-        await saveBestEffort(this.storage, nextSave);
+        await saveBestEffort(gameStorage, nextSave);
         if (!this.isShutdown) {
           this.render();
         }

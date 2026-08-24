@@ -1,6 +1,7 @@
 import { SAVE_KEY, SAVE_VERSION } from '../config/constants';
 import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
 import { DEFAULT_SAVE_DATA } from '../data/progression';
+import { youtubePlayables, type YouTubePlayablesService } from './YouTubePlayablesService';
 import type { GameSaveData, PermanentUpgradeId, PermanentUpgradeState } from '../types';
 
 export interface GameStorage {
@@ -23,6 +24,29 @@ export class LocalStorageGameStorage implements GameStorage {
   }
 }
 
+export class YouTubeGameStorage implements GameStorage {
+  private cloudLoaded = false;
+
+  constructor(private readonly youtube: YouTubePlayablesService = youtubePlayables) {}
+
+  async load(): Promise<GameSaveData> {
+    const raw = await this.youtube.loadData();
+    this.cloudLoaded = this.youtube.hasSuccessfulLoad();
+    return parseSaveData(raw);
+  }
+
+  async save(data: GameSaveData): Promise<void> {
+    if (!this.cloudLoaded || !this.youtube.hasSuccessfulLoad()) {
+      throw new Error('YouTube cloud save attempted before successful loadData');
+    }
+    await this.youtube.saveData(serializeSaveData(data));
+  }
+}
+
+export function createGameStorage(youtube: YouTubePlayablesService = youtubePlayables): GameStorage {
+  return youtube.isPlayablesEnvironment() ? new YouTubeGameStorage(youtube) : new LocalStorageGameStorage();
+}
+
 export async function loadSaveOrDefault(storage: GameStorage): Promise<GameSaveData> {
   try {
     return await storage.load();
@@ -38,6 +62,14 @@ export async function saveBestEffort(storage: GameStorage, data: GameSaveData): 
   } catch {
     return false;
   }
+}
+
+export function serializeSaveData(data: GameSaveData): string {
+  return JSON.stringify(normalizeSaveData(data));
+}
+
+export function getSerializedSaveSizeBytes(data: GameSaveData): number {
+  return new TextEncoder().encode(serializeSaveData(data)).length;
 }
 
 export function parseSaveData(raw: string | null): GameSaveData {

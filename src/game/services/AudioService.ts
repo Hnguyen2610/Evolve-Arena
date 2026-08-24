@@ -26,6 +26,7 @@ const AUDIO_EVENT_FREQUENCIES: Record<AudioEvent, number> = {
 export interface GameAudio {
   muted: boolean;
   setMuted(muted: boolean): void;
+  setPlatformAudioEnabled(enabled: boolean): void;
   pause(): void;
   resume(): void;
   play(event: AudioEvent): void;
@@ -35,11 +36,25 @@ export class BrowserAudioService implements GameAudio {
   muted = true;
   private context: AudioContext | null = null;
   private suspendedByGame = false;
+  private platformAudioEnabled = true;
 
   setMuted(muted: boolean): void {
     this.muted = muted;
-    if (!muted) {
+    if (this.canOutputAudio()) {
       void this.ensureContext();
+    } else if (!this.platformAudioEnabled) {
+      void this.context?.suspend();
+    }
+  }
+
+  setPlatformAudioEnabled(enabled: boolean): void {
+    this.platformAudioEnabled = enabled;
+    if (!enabled) {
+      void this.context?.suspend();
+      return;
+    }
+    if (this.canOutputAudio()) {
+      void this.context?.resume();
     }
   }
 
@@ -50,13 +65,13 @@ export class BrowserAudioService implements GameAudio {
 
   resume(): void {
     this.suspendedByGame = false;
-    if (!this.muted) {
+    if (this.canOutputAudio()) {
       void this.context?.resume();
     }
   }
 
   play(event: AudioEvent): void {
-    if (this.muted || this.suspendedByGame) {
+    if (!this.canOutputAudio()) {
       return;
     }
 
@@ -77,6 +92,10 @@ export class BrowserAudioService implements GameAudio {
       oscillator.start();
       oscillator.stop(context.currentTime + 0.09);
     });
+  }
+
+  private canOutputAudio(): boolean {
+    return !this.muted && this.platformAudioEnabled && !this.suspendedByGame;
   }
 
   private async ensureContext(): Promise<AudioContext | null> {

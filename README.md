@@ -39,6 +39,7 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
+npm run audit:playables
 ```
 
 ## Controls
@@ -76,7 +77,7 @@ npm run build
 
 ## Persistence
 
-Save data is versioned and accessed through `GameStorage`, with a `LocalStorageGameStorage` implementation. The parser handles missing, malformed, old, or partial save data by falling back to safe defaults.
+Save data is versioned and accessed through `GameStorage`. Local development uses `LocalStorageGameStorage`; YouTube Playables environments use `YouTubeGameStorage` through the official `ytgame.game.loadData()` / `saveData()` APIs. The parser handles missing, malformed, old, or partial save data by falling back to safe defaults.
 
 Persisted data:
 
@@ -86,10 +87,11 @@ Persisted data:
 
 ## YouTube Playables Readiness
 
-The game includes a dedicated `YouTubePlayablesService` adapter with local fallback behavior for initialization, lifecycle pause/resume hooks, score submission, and save/load extension points. It intentionally does not call unofficial or invented YouTube APIs.
+The game includes a dedicated `YouTubePlayablesService` adapter for official SDK calls, including environment detection, ready signals, cloud save, score submission, audio state, pause/resume, and language lookup. Local development remains playable without YouTube credentials.
+
+See `docs/youtube-playables-readiness.md` for the current integration checklist and remaining Developer Portal / Test Suite steps.
 
 ## Known Limitations
 
 - Audio uses lightweight generated Web Audio tones rather than authored sound assets.
-- The YouTube Playables adapter is local-safe only until official SDK onboarding details are available.
-- Art is procedural MVP art, not final production art.
+- Official YouTube Playables Test Suite validation and Developer Portal certification have not been run locally.
