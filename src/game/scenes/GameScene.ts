@@ -70,6 +70,8 @@ export class GameScene extends Phaser.Scene {
   private bossRadialTelegraphUntil = 0;
   private bossRadialFired = false;
   private bossTelegraph: Phaser.GameObjects.GameObject | null = null;
+  private bossRadialRing: Phaser.GameObjects.Arc | null = null;
+  private bossRecoverUntil = 0;
   private lifecyclePaused = false;
 
   constructor() {
@@ -81,7 +83,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.mode = 'playing';
+    this.resetRunState();
+    this.physics.world.resume();
     this.stats = createPlayerStats(this.save.permanentUpgrades);
     this.createWorld();
     this.createGroups();
@@ -93,11 +96,38 @@ export class GameScene extends Phaser.Scene {
     this.bossBar = new BossHealthBar(this);
     this.registerPhysics();
     this.registerLifecycle();
+    this.registerAudioUnlock();
     this.hud.showHint('Move to survive. Attacks are automatic.');
     this.analytics.track('game_started');
     void this.youtube.initialize();
     this.youtube.signalFirstFrame();
     this.youtube.signalGameReady();
+  }
+
+  private resetRunState(): void {
+    this.mode = 'playing';
+    this.upgrades = {};
+    this.level = 1;
+    this.xp = 0;
+    this.elapsedSeconds = 0;
+    this.score = 0;
+    this.kills = 0;
+    this.eliteKills = 0;
+    this.bossSpawned = false;
+    this.bossDefeated = false;
+    this.nextSpawnAt = 0;
+    this.nextAttackAt = 0;
+    this.boss = null;
+    this.nextBossChargeAt = 0;
+    this.nextBossRadialAt = 0;
+    this.bossChargeVector.set(0, 0);
+    this.bossRadialTelegraphUntil = 0;
+    this.bossRadialFired = false;
+    this.bossTelegraph = null;
+    this.bossRadialRing = null;
+    this.bossRecoverUntil = 0;
+    this.lifecyclePaused = false;
+    this.upgradeUi = null;
   }
 
   update(time: number, delta: number): void {
@@ -192,11 +222,22 @@ export class GameScene extends Phaser.Scene {
       }
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off('pointerdown', this.unlockAudio, this);
+      this.input.keyboard?.off('keydown', this.unlockAudio, this);
       this.touchInput.destroy();
       this.hud.destroy();
       this.bossBar.destroy();
       this.youtube.dispose();
     });
+  }
+
+  private registerAudioUnlock(): void {
+    this.input.once('pointerdown', this.unlockAudio, this);
+    this.input.keyboard?.once('keydown', this.unlockAudio, this);
+  }
+
+  private unlockAudio(): void {
+    this.audio.setMuted(false);
   }
 
   private updatePlayer(): void {
@@ -436,7 +477,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     const data = projectile.projectileData;
-    this.damageEnemy(enemy, data.damage, data.knockback, true);
+    if (projectile.hitEnemies.has(enemy)) {
+      return;
+    }
+    projectile.hitEnemies.add(enemy);
+    this.damageEnemy(enemy, data.damage, data.knockback, true, 0);
     data.pierceLeft -= 1;
     if (data.pierceLeft < 0) {
       projectile.disableBody(true, true);
@@ -458,7 +503,13 @@ export class GameScene extends Phaser.Scene {
     projectile.disableBody(true, true);
   }
 
-  private damageEnemy(enemy: Enemy, amount: number, knockback: number, canExplode: boolean): void {
+  private damageEnemy(
+    enemy: Enemy,
+    amount: number,
+    knockback: number,
+    canExplode: boolean,
+    explosionDepth: number,
+  ): void {
     const data = enemy.dataModel;
     data.health -= amount;
     this.showDamage(enemy.x, enemy.y, Math.floor(amount), data.elite ? '#fff5a8' : '#ffffff');
@@ -473,11 +524,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (data.health <= 0) {
-      this.killEnemy(enemy, canExplode);
+      this.killEnemy(enemy, canExplode, explosionDepth);
     }
   }
 
-  private killEnemy(enemy: Enemy, canExplode: boolean): void {
+  private killEnemy(enemy: Enemy, canExplode: boolean, explosionDepth: number): void {
     const data = enemy.dataModel;
     this.score += data.score;
     this.kills += 1;
@@ -494,7 +545,13 @@ export class GameScene extends Phaser.Scene {
     this.audio.play('enemyDeath');
 
     if (canExplode && this.stats.explosionOnKill > 0) {
-      this.explode(enemy.x, enemy.y, this.stats.explosionOnKill, this.stats.damage * (1.4 + this.stats.chainReaction * 0.25));
+      this.explode(
+        enemy.x,
+        enemy.y,
+        this.stats.explosionOnKill,
+        this.stats.damage * (1.4 + this.stats.chainReaction * 0.25),
+        explosionDepth,
+      );
     }
 
     if (data.type === 'boss') {
@@ -502,15 +559,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private explode(x: number, y: number, radius: number, damage: number): void {
-    const circle = this.add.circle(x, y, radius, 0xffad5b, 0.22).setDepth(UI_DEPTH.effects);
+  private explode(x: number, y: number, radius: number, damage: number, chainDepth: number): void {
+    const scaledRadius = radius * (1 + Math.min(chainDepth, this.stats.chainReaction) * 0.18);
+    const circle = this.add.circle(x, y, scaledRadius, 0xffad5b, 0.22).setDepth(UI_DEPTH.effects);
     this.tweens.add({ targets: circle, scale: 1.3, alpha: 0, duration: 260, onComplete: () => circle.destroy() });
     this.enemies.getChildren().forEach((gameObject) => {
       const enemy = gameObject as Enemy;
-      if (!enemy.active || Phaser.Math.Distance.Squared(x, y, enemy.x, enemy.y) > radius * radius) {
+      if (!enemy.active || Phaser.Math.Distance.Squared(x, y, enemy.x, enemy.y) > scaledRadius * scaledRadius) {
         return;
       }
-      this.damageEnemy(enemy, damage, 120, false);
+      this.damageEnemy(enemy, damage, 120, chainDepth < this.stats.chainReaction, chainDepth + 1);
     });
   }
 
@@ -541,7 +599,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const distanceSq = Phaser.Math.Distance.Squared(orb.x, orb.y, this.player.x, this.player.y);
-      if (distanceSq < this.stats.magnetRange * this.stats.magnetRange || this.time.now - orb.xpData.spawnedAt > 1100) {
+      if (distanceSq < this.stats.magnetRange * this.stats.magnetRange || this.time.now - orb.xpData.spawnedAt > 3500) {
         orb.xpData.attracted = true;
       }
       if (orb.xpData.attracted) {
@@ -687,15 +745,20 @@ export class GameScene extends Phaser.Scene {
       this.boss.setVelocity(0, 0);
     } else if (data.chargeUntil > time) {
       this.boss.setVelocity(this.bossChargeVector.x * 520, this.bossChargeVector.y * 520);
+    } else if (this.bossRecoverUntil > time) {
+      this.boss.setVelocity(0, 0);
     } else {
       data.chargeUntil = 0;
       this.boss.setVelocity(direction.x * data.speed, direction.y * data.speed);
       if (time >= this.nextBossChargeAt) {
         this.startBossCharge(time, direction);
-      }
-      if (time >= this.nextBossRadialAt) {
+      } else if (time >= this.nextBossRadialAt) {
         this.startBossRadial(time);
       }
+    }
+
+    if (this.bossRadialRing?.active) {
+      this.bossRadialRing.setPosition(this.boss.x, this.boss.y);
     }
 
     if (this.bossRadialTelegraphUntil > 0 && time >= this.bossRadialTelegraphUntil && !this.bossRadialFired) {
@@ -717,6 +780,7 @@ export class GameScene extends Phaser.Scene {
     this.bossChargeVector = direction.clone();
     this.boss.dataModel.telegraphUntil = time + 620;
     this.boss.dataModel.chargeUntil = time + 1320;
+    this.bossRecoverUntil = time + 1600;
     this.nextBossChargeAt = time + GAME_TIMING.bossChargeCooldownMs;
     this.bossTelegraph?.destroy();
     const line = this.add.rectangle(this.boss.x, this.boss.y, 420, 38, 0xff5065, 0.24).setDepth(UI_DEPTH.effects);
@@ -731,10 +795,24 @@ export class GameScene extends Phaser.Scene {
     }
     this.bossRadialTelegraphUntil = time + 680;
     this.bossRadialFired = false;
+    this.boss.dataModel.telegraphUntil = this.bossRadialTelegraphUntil;
+    this.bossRecoverUntil = time + 980;
     this.nextBossRadialAt = time + GAME_TIMING.bossRadialCooldownMs;
     const ring = this.add.circle(this.boss.x, this.boss.y, 72, 0xffe867, 0.12).setStrokeStyle(4, 0xffe867, 0.65);
     ring.setDepth(UI_DEPTH.effects);
-    this.tweens.add({ targets: ring, scale: 2.2, alpha: 0, duration: 680, onComplete: () => ring.destroy() });
+    this.bossRadialRing = ring;
+    this.tweens.add({
+      targets: ring,
+      scale: 2.2,
+      alpha: 0,
+      duration: 680,
+      onComplete: () => {
+        ring.destroy();
+        if (this.bossRadialRing === ring) {
+          this.bossRadialRing = null;
+        }
+      },
+    });
   }
 
   private fireBossRadial(): void {

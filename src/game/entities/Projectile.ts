@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import type { ProjectileData } from '../types';
+import type { Enemy } from './Enemy';
 
 export class Projectile extends Phaser.Physics.Arcade.Sprite {
   projectileData: ProjectileData;
+  readonly hitEnemies = new Set<Enemy>();
 
   constructor(scene: Phaser.Scene, owner: 'player' | 'enemy') {
     super(scene, -200, -200, owner === 'player' ? 'projectile' : 'enemy-projectile');
@@ -22,6 +24,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
 
   fire(x: number, y: number, angle: number, speed: number, data: ProjectileData): void {
     this.projectileData = { ...data };
+    this.hitEnemies.clear();
     this.enableBody(true, x, y, true, true);
     this.setScale(data.size);
     const radius = 7 * data.size;

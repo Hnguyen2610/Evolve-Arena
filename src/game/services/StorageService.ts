@@ -1,6 +1,7 @@
 import { SAVE_KEY, SAVE_VERSION } from '../config/constants';
+import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
 import { DEFAULT_SAVE_DATA } from '../data/progression';
-import type { GameSaveData, PermanentUpgradeState } from '../types';
+import type { GameSaveData, PermanentUpgradeId, PermanentUpgradeState } from '../types';
 
 export interface GameStorage {
   load(): Promise<GameSaveData>;
@@ -42,9 +43,9 @@ export function normalizeSaveData(input: unknown): GameSaveData {
     bestScore: safeNonNegativeInt(input.bestScore),
     coins: safeNonNegativeInt(input.coins),
     permanentUpgrades: {
-      damage: safeUpgradeLevel(permanent.damage),
-      health: safeUpgradeLevel(permanent.health),
-      speed: safeUpgradeLevel(permanent.speed),
+      damage: safeUpgradeLevel('damage', permanent.damage),
+      health: safeUpgradeLevel('health', permanent.health),
+      speed: safeUpgradeLevel('speed', permanent.speed),
     },
   };
 }
@@ -60,10 +61,17 @@ function safeNonNegativeInt(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
 }
 
-function safeUpgradeLevel(value: unknown): PermanentUpgradeState[keyof PermanentUpgradeState] {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+function safeUpgradeLevel(id: PermanentUpgradeId, value: unknown): PermanentUpgradeState[keyof PermanentUpgradeState] {
+  const maxLevel = PERMANENT_UPGRADE_BALANCE[id].maxLevel;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? clampInt(Math.floor(value), 0, maxLevel)
+    : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

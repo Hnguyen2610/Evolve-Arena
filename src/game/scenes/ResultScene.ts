@@ -27,7 +27,11 @@ export class ResultScene extends Phaser.Scene {
       bestScore: Math.max(this.save.bestScore, this.result.score),
       coins: this.save.coins + this.result.coinsEarned,
     };
-    await this.storage.save(this.save);
+    try {
+      await this.storage.save(this.save);
+    } catch {
+      // The result screen must still render if browser storage is unavailable.
+    }
 
     const { width, height } = this.scale;
     const centerX = width / 2;

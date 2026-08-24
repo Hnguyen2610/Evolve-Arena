@@ -125,7 +125,7 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: 'chain-reaction',
     name: 'Chain Reaction',
-    description: 'Explosions grow and can chain',
+    description: 'Explosions grow and chain once per level',
     maxLevel: 3,
     rarity: 'epic',
     apply: (stats) => {

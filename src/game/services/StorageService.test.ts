@@ -14,4 +14,20 @@ describe('StorageService', () => {
     expect(save.permanentUpgrades.damage).toBe(2);
     expect(save.permanentUpgrades.health).toBe(0);
   });
+
+  it('clamps permanent upgrade levels to supported maximums', () => {
+    const save = parseSaveData(
+      JSON.stringify({
+        permanentUpgrades: {
+          damage: 999999,
+          health: -3,
+          speed: 999999,
+        },
+      }),
+    );
+
+    expect(save.permanentUpgrades.damage).toBe(20);
+    expect(save.permanentUpgrades.health).toBe(0);
+    expect(save.permanentUpgrades.speed).toBe(15);
+  });
 });
