@@ -50,6 +50,12 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.trail.setRotation(this.rotation);
   }
 
+  disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {
+    super.disableBody(disableGameObject, hideGameObject);
+    this.trail.setVisible(false);
+    return this;
+  }
+
   destroy(fromScene?: boolean): void {
     this.trail.destroy();
     super.destroy(fromScene);

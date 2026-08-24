@@ -32,6 +32,12 @@ export class ExperienceOrb extends Phaser.Physics.Arcade.Sprite {
     this.setRotation(time / 600);
   }
 
+  disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {
+    super.disableBody(disableGameObject, hideGameObject);
+    this.glow.setVisible(false);
+    return this;
+  }
+
   destroy(fromScene?: boolean): void {
     this.glow.destroy();
     super.destroy(fromScene);
