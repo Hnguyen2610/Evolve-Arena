@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
 import { gameStorage, platform } from '../services/PlatformServices';
+import { setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
 import { saveBestEffort } from '../services/StorageService';
+import { persistResultAndMaybeSendScore } from '../systems/ResultPersistenceSystem';
 import type { GameSaveData, RunResult } from '../types';
 
 interface ResultSceneData {
@@ -24,17 +26,13 @@ export class ResultScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     this.scene.stop('GameScene');
-    const previousBest = this.save.bestScore;
-    const newBest = this.result.score > previousBest;
-    this.save = {
-      ...this.save,
-      bestScore: Math.max(this.save.bestScore, this.result.score),
-      coins: this.save.coins + this.result.coinsEarned,
-    };
-    await saveBestEffort(gameStorage, this.save);
-    if (newBest) {
-      void platform.sendScore(this.save.bestScore);
-    }
+    const persistence = await persistResultAndMaybeSendScore(this.save, this.result, {
+      save: (save) => saveBestEffort(gameStorage, save),
+      sendScore: (score) => platform.sendScore(score),
+    });
+    const newBest = persistence.newBest;
+    this.save = persistence.save;
+    setLatestSaveSnapshot(this.save);
 
     const { width, height } = this.scale;
     const centerX = width / 2;

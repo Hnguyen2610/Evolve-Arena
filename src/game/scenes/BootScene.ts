@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { UI_DEPTH } from '../config/constants';
 import { COLORS, ENEMY_COLORS } from '../config/visual';
+import { platform } from '../services/PlatformServices';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -9,7 +10,22 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.createTextures();
-    this.scene.start('MenuScene');
+    this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, COLORS.backgroundDeep, 1);
+    this.add
+      .text(this.scale.width / 2, this.scale.height / 2, 'EVOLVE ARENA', {
+        color: '#f7fbff',
+        fontFamily: 'Arial Black, Arial, Helvetica, sans-serif',
+        fontSize: `${Math.min(36, Math.max(24, this.scale.width * 0.06))}px`,
+        fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5);
+
+    this.game.events.once(Phaser.Core.Events.POST_RENDER, () => {
+      platform.signalFirstFrameReady();
+      this.scene.start('MenuScene');
+    });
   }
 
   private createTextures(): void {

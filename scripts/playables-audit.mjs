@@ -12,6 +12,28 @@ const MAX_FILE_COUNT = 8000;
 const MAX_SAVE_BYTES = 3 * 1024 * 1024;
 const VALID_FILENAME = /^[A-Za-z0-9_.-]+$/;
 const PLAYABLES_SDK = 'https://www.youtube.com/game_api/v1';
+const TEXT_FILE_EXTENSIONS = new Set(['.html', '.js', '.css', '.json', '.txt', '.svg', '.map']);
+const ALLOWED_EXTERNAL_URLS = new Set([PLAYABLES_SDK]);
+const KNOWN_HARMLESS_URL_PREFIXES = [
+  'http://prunegames.com',
+  'http://steffe.se',
+  'http://www.w3.org/',
+  'https://github.com/niklasvh/base64-arraybuffer',
+  'https://phaser.io',
+  'https://github.com/phaserjs/phaser',
+  'https://github.com/photonstorm/phaser',
+  'https://opensource.org/',
+  'https://github.com/vitejs/vite',
+  'https://developer.mozilla.org/',
+  'https://www.w3.org/',
+];
+const NETWORK_API_PATTERNS = [
+  { name: 'fetch', pattern: /\bfetch\s*\(/g },
+  { name: 'XMLHttpRequest', pattern: /\bXMLHttpRequest\b/g },
+  { name: 'WebSocket', pattern: /\bWebSocket\s*\(/g },
+  { name: 'EventSource', pattern: /\bEventSource\s*\(/g },
+  { name: 'sendBeacon', pattern: /\bnavigator\.sendBeacon\s*\(/g },
+];
 
 const files = await listFiles(DIST_DIR);
 const stats = await Promise.all(files.map(async (file) => ({ file, size: (await stat(file)).size })));
@@ -26,7 +48,21 @@ const html = await readFile(INDEX_PATH, 'utf8');
 const sdkIndex = html.indexOf(PLAYABLES_SDK);
 const moduleIndex = html.indexOf('type="module"');
 const absoluteBundleRefs = collectAbsoluteBundleRefs(html);
-const externalRefs = collectExternalRefs(html).filter((ref) => ref !== PLAYABLES_SDK);
+const externalRefs = collectExternalRefs(html).filter((ref) => !ALLOWED_EXTERNAL_URLS.has(ref));
+const textFileReports = await scanTextFiles(stats.map((item) => item.file));
+const discoveredExternalUrls = unique(textFileReports.flatMap((item) => item.urls));
+const allowedExternalUrls = discoveredExternalUrls.filter((url) => ALLOWED_EXTERNAL_URLS.has(url));
+const frameworkExternalUrls = discoveredExternalUrls.filter((url) => isKnownHarmlessUrl(url));
+const prohibitedExternalUrls = discoveredExternalUrls.filter(
+  (url) => !ALLOWED_EXTERNAL_URLS.has(url) && !isKnownHarmlessUrl(url),
+);
+const networkApiMatches = textFileReports.flatMap((item) =>
+  item.networkMatches.map((match) => ({
+    file: path.relative(DIST_DIR, item.file),
+    pattern: match.pattern,
+    count: match.count,
+  })),
+);
 const saveFixture = {
   version: 1,
   bestScore: 999999,
@@ -61,7 +97,10 @@ if (absoluteBundleRefs.length > 0) {
   failures.push(`absolute bundle refs: ${absoluteBundleRefs.join(', ')}`);
 }
 if (externalRefs.length > 0) {
-  failures.push(`unexpected external refs: ${externalRefs.join(', ')}`);
+  failures.push(`unexpected index external refs: ${externalRefs.join(', ')}`);
+}
+if (prohibitedExternalUrls.length > 0) {
+  failures.push(`prohibited external urls in bundle: ${prohibitedExternalUrls.join(', ')}`);
 }
 if (saveBytes >= MAX_SAVE_BYTES) {
   failures.push(`save fixture ${saveBytes} bytes exceeds ${MAX_SAVE_BYTES}`);
@@ -81,7 +120,13 @@ const report = {
   })),
   invalidFilenames,
   absoluteBundleRefs,
+  scannedTextFiles: textFileReports.map((item) => path.relative(DIST_DIR, item.file)),
+  discoveredExternalUrls,
+  allowedExternalUrls,
+  frameworkExternalUrls,
+  prohibitedExternalUrls,
   unexpectedExternalRefs: externalRefs,
+  networkApiMatches,
   sdkBeforeGameModule: sdkIndex >= 0 && moduleIndex >= 0 && sdkIndex < moduleIndex,
   saveFixtureBytes: saveBytes,
   passed: failures.length === 0,
@@ -103,6 +148,50 @@ async function listFiles(directory) {
     }),
   );
   return nested.flat();
+}
+
+async function scanTextFiles(filePaths) {
+  const textFiles = filePaths.filter((file) => TEXT_FILE_EXTENSIONS.has(path.extname(file)));
+  return Promise.all(
+    textFiles.map(async (file) => {
+      const text = await readFile(file, 'utf8');
+      return {
+        file,
+        urls: collectUrls(text),
+        networkMatches: collectNetworkApiMatches(text),
+      };
+    }),
+  );
+}
+
+function collectUrls(text) {
+  const urls = [];
+  const pattern = /https?:\/\/[^\s"'`<>\\)]+/g;
+  let match = pattern.exec(text);
+  while (match) {
+    urls.push(normalizeUrl(match[0]));
+    match = pattern.exec(text);
+  }
+  return unique(urls);
+}
+
+function collectNetworkApiMatches(text) {
+  return NETWORK_API_PATTERNS.flatMap(({ name, pattern }) => {
+    const matches = text.match(pattern);
+    return matches ? [{ pattern: name, count: matches.length }] : [];
+  });
+}
+
+function isKnownHarmlessUrl(url) {
+  return KNOWN_HARMLESS_URL_PREFIXES.some((prefix) => url.startsWith(prefix));
+}
+
+function normalizeUrl(url) {
+  return url.replace(/[|.,;:]+$/u, '').replace(/\|MIT$/u, '');
+}
+
+function unique(values) {
+  return [...new Set(values)].sort();
 }
 
 function collectAbsoluteBundleRefs(htmlText) {

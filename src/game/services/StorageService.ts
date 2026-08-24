@@ -27,19 +27,19 @@ export class LocalStorageGameStorage implements GameStorage {
 export class YouTubeGameStorage implements GameStorage {
   private cloudLoaded = false;
 
-  constructor(private readonly youtube: YouTubePlayablesService = youtubePlayables) {}
+  constructor(private readonly playables: YouTubePlayablesService = youtubePlayables) {}
 
   async load(): Promise<GameSaveData> {
-    const raw = await this.youtube.loadData();
-    this.cloudLoaded = this.youtube.hasSuccessfulLoad();
+    const raw = await this.playables.loadData();
+    this.cloudLoaded = this.playables.hasSuccessfulLoad();
     return parseSaveData(raw);
   }
 
   async save(data: GameSaveData): Promise<void> {
-    if (!this.cloudLoaded || !this.youtube.hasSuccessfulLoad()) {
+    if (!this.cloudLoaded || !this.playables.hasSuccessfulLoad()) {
       throw new Error('YouTube cloud save attempted before successful loadData');
     }
-    await this.youtube.saveData(serializeSaveData(data));
+    await this.playables.saveData(serializeSaveData(data));
   }
 }
 

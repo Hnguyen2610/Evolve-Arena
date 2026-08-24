@@ -3,6 +3,7 @@ import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
 import { COLORS } from '../config/visual';
 import { buyPermanentUpgrade, getPermanentUpgradeCost } from '../systems/ProgressionSystem';
 import { gameStorage, platform } from '../services/PlatformServices';
+import { setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
 import { loadSaveOrDefault, saveBestEffort } from '../services/StorageService';
 import type { GameSaveData, PermanentUpgradeId } from '../types';
 
@@ -21,11 +22,11 @@ export class MenuScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
     await platform.initialize();
     this.save = await loadSaveOrDefault(gameStorage);
+    setLatestSaveSnapshot(this.save);
     if (this.isShutdown) {
       return;
     }
     this.render();
-    platform.signalFirstFrameReady();
     platform.signalGameReady();
   }
 
@@ -238,6 +239,7 @@ export class MenuScene extends Phaser.Scene {
       bg.on('pointerup', async () => {
         const nextSave = buyPermanentUpgrade(this.save, id);
         this.save = nextSave;
+        setLatestSaveSnapshot(nextSave);
         await saveBestEffort(gameStorage, nextSave);
         if (!this.isShutdown) {
           this.render();
