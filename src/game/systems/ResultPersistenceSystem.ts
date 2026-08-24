@@ -2,7 +2,8 @@ import type { GameSaveData, RunResult } from '../types';
 
 interface ResultPersistenceDependencies {
   save(data: GameSaveData): Promise<boolean>;
-  sendScore(score: number): Promise<boolean>;
+  markPendingBestScore(score: number): void;
+  synchronizePendingBestScore(): Promise<boolean>;
 }
 
 export interface ResultPersistenceOutcome {
@@ -24,8 +25,11 @@ export async function persistResultAndMaybeSendScore(
     coins: save.coins + result.coinsEarned,
   };
 
+  if (newBest) {
+    dependencies.markPendingBestScore(nextSave.bestScore);
+  }
   const persisted = await dependencies.save(nextSave);
-  const scoreSubmitted = newBest && persisted ? await dependencies.sendScore(nextSave.bestScore) : false;
+  const scoreSubmitted = persisted ? await dependencies.synchronizePendingBestScore() : false;
 
   return {
     save: nextSave,

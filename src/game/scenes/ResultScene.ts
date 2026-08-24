@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
 import { gameStorage, platform } from '../services/PlatformServices';
-import { setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
+import { markPendingBestScore, setLatestSaveSnapshot, synchronizePendingBestScore } from '../services/PersistenceCoordinator';
 import { saveBestEffort } from '../services/StorageService';
 import { persistResultAndMaybeSendScore } from '../systems/ResultPersistenceSystem';
 import type { GameSaveData, RunResult } from '../types';
@@ -27,8 +27,14 @@ export class ResultScene extends Phaser.Scene {
   async create(): Promise<void> {
     this.scene.stop('GameScene');
     const persistence = await persistResultAndMaybeSendScore(this.save, this.result, {
-      save: (save) => saveBestEffort(gameStorage, save),
-      sendScore: (score) => platform.sendScore(score),
+      save: (save) => {
+        setLatestSaveSnapshot(save);
+        return saveBestEffort(gameStorage, save);
+      },
+      markPendingBestScore: (score) => {
+        markPendingBestScore(score, platform);
+      },
+      synchronizePendingBestScore: () => synchronizePendingBestScore(platform),
     });
     const newBest = persistence.newBest;
     this.save = persistence.save;
@@ -114,17 +120,17 @@ export class ResultScene extends Phaser.Scene {
       const buttonWidth = Math.min(250, width * 0.32);
       const buttonY = panelY + panelHeight * 0.35;
       this.createButton(centerX - buttonWidth * 0.58, buttonY, buttonWidth, 50, 'PLAY AGAIN', () => {
-        this.scene.start('GameScene', { save: this.save });
+        this.scene.start('GameScene', { save: this.save, replay: true });
       });
       this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'UPGRADES', () => {
-        this.scene.start('MenuScene');
+        this.scene.start('MenuScene', { save: this.save });
       }, false);
     } else {
       this.createButton(centerX, panelY + panelHeight * 0.26, Math.min(320, panelWidth - 48), 60, 'PLAY AGAIN', () => {
-        this.scene.start('GameScene', { save: this.save });
+        this.scene.start('GameScene', { save: this.save, replay: true });
       });
       this.createButton(centerX, panelY + panelHeight * 0.4, Math.min(320, panelWidth - 48), 52, 'UPGRADES', () => {
-        this.scene.start('MenuScene');
+        this.scene.start('MenuScene', { save: this.save });
       }, false);
     }
   }

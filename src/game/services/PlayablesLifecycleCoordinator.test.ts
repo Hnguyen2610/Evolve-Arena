@@ -109,17 +109,22 @@ describe('PlayablesLifecycleCoordinator', () => {
     expect(audio.resume).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['menu', 'level-up', 'result'])('keeps %s state ownership outside lifecycle callbacks', (surface) => {
+  it.each([
+    { activeScene: 'MenuScene', gameMode: 'menu' },
+    { activeScene: 'GameScene', gameMode: 'playing' },
+    { activeScene: 'GameScene', gameMode: 'level-up' },
+    { activeScene: 'ResultScene', gameMode: 'game-over' },
+  ])('keeps $activeScene/$gameMode ownership outside lifecycle callbacks', (stateOwner) => {
     const platform = createMockPlatform();
     const game = createMockGame();
     const coordinator = new PlayablesLifecycleCoordinator({ platform, audio: createMockAudio() });
     coordinator.bind(game);
-    const activeSurface = surface;
+    const before = { ...stateOwner };
 
     platform.triggerPause();
     platform.triggerResume();
 
-    expect(activeSurface).toBe(surface);
+    expect(stateOwner).toEqual(before);
     expect(game.loop.sleep).toHaveBeenCalledTimes(1);
     expect(game.loop.wake).toHaveBeenCalledTimes(1);
   });

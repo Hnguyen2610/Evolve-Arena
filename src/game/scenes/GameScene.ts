@@ -10,7 +10,7 @@ import { Projectile } from '../entities/Projectile';
 import { DesktopInput } from '../input/DesktopInput';
 import { TouchInput } from '../input/TouchInput';
 import { MemoryAnalyticsService } from '../services/AnalyticsService';
-import { gameAudio } from '../services/PlatformServices';
+import { gameAudio, playtestTelemetry } from '../services/PlatformServices';
 import { setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
 import { cloneDefaultSave } from '../services/StorageService';
 import { BossHealthBar } from '../ui/BossHealthBar';
@@ -33,6 +33,7 @@ import type {
 
 interface GameSceneData {
   save?: GameSaveData;
+  replay?: boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -52,6 +53,8 @@ export class GameScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private audio = gameAudio;
   private analytics = new MemoryAnalyticsService();
+  private replayStart = false;
+  private currentOfferedUpgradeIds: string[] = [];
   private upgrades: UpgradeState = {};
   private level = 1;
   private xp = 0;
@@ -81,11 +84,13 @@ export class GameScene extends Phaser.Scene {
 
   init(data: GameSceneData): void {
     this.save = data.save ?? cloneDefaultSave();
+    this.replayStart = data.replay === true;
   }
 
   create(): void {
     this.resetRunState();
     setLatestSaveSnapshot(this.save);
+    playtestTelemetry.beginRun(this.replayStart ? 'replay' : 'new');
     this.physics.world.resume();
     this.stats = createPlayerStats(this.save.permanentUpgrades);
     this.createWorld();
@@ -100,7 +105,7 @@ export class GameScene extends Phaser.Scene {
     this.registerLifecycle();
     this.registerAudioUnlock();
     this.hud.showHint('Move to survive. Attacks are automatic.');
-    this.analytics.track('game_started');
+    this.analytics.track(this.replayStart ? 'replay_started' : 'game_started');
   }
 
   private resetRunState(): void {
@@ -561,10 +566,13 @@ export class GameScene extends Phaser.Scene {
     this.kills += 1;
     if (data.elite) {
       this.eliteKills += 1;
+      this.analytics.track('elite_killed', { time: this.elapsedSeconds });
+      playtestTelemetry.recordEliteKilled(this.elapsedSeconds);
     }
     if (data.type === 'boss') {
       this.bossDefeated = true;
       this.analytics.track('boss_defeated');
+      playtestTelemetry.recordBossDefeated(this.elapsedSeconds);
     }
     this.dropXp(deathX, deathY, data.xp);
     this.createBurst(deathX, deathY, data.elite ? 0xfff5a8 : 0xffffff);
@@ -608,6 +616,7 @@ export class GameScene extends Phaser.Scene {
   private damagePlayer(rawDamage: number): void {
     const damage = Math.max(1, rawDamage - this.stats.armor);
     this.stats.currentHealth -= damage;
+    playtestTelemetry.recordDamageTaken(damage);
     this.cameras.main.shake(90, 0.004);
     this.showDamage(this.player.x, this.player.y - 24, Math.floor(damage), '#ff9aa8');
     this.tweens.add({ targets: this.player, alpha: 0.55, duration: 70, yoyo: true });
@@ -661,6 +670,9 @@ export class GameScene extends Phaser.Scene {
     this.audio.play('xp');
     this.createPickupBurst(orb.x, orb.y);
     if (result.levelsGained > 0) {
+      if (playtestTelemetry.recordFirstLevelUp(this.elapsedSeconds)) {
+        this.analytics.track('first_level_up', { time: this.elapsedSeconds });
+      }
       const firstGainedLevel = this.level - result.levelsGained + 1;
       for (let index = 0; index < result.levelsGained; index += 1) {
         this.analytics.track('player_level', { level: firstGainedLevel + index });
@@ -704,6 +716,9 @@ export class GameScene extends Phaser.Scene {
       this.physics.world.resume();
       return;
     }
+    this.currentOfferedUpgradeIds = options.map((option) => option.id);
+    playtestTelemetry.recordUpgradeOffer(this.currentOfferedUpgradeIds, this.elapsedSeconds);
+    this.analytics.track('upgrade_offered', { ids: this.currentOfferedUpgradeIds.join(','), time: this.elapsedSeconds });
     this.pendingUpgradeChoices -= 1;
     this.mode = 'level-up';
     this.physics.world.pause();
@@ -714,8 +729,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   private selectUpgrade(upgrade: UpgradeDefinition): void {
+    const levelBefore = this.upgrades[upgrade.id] ?? 0;
     this.upgrades = applyUpgrade(this.stats, this.upgrades, upgrade);
-    this.analytics.track('upgrade_selected', { id: upgrade.id, level: this.upgrades[upgrade.id] ?? 0 });
+    const levelAfter = this.upgrades[upgrade.id] ?? 0;
+    this.analytics.track('upgrade_selected', { id: upgrade.id, level: levelAfter });
+    playtestTelemetry.recordUpgradeSelected(
+      upgrade.id,
+      levelBefore,
+      levelAfter,
+      this.elapsedSeconds,
+      this.currentOfferedUpgradeIds,
+    );
     this.upgradeUi?.destroy();
     this.upgradeUi = null;
     this.hud.showHint(upgrade.name);
@@ -756,6 +780,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.shake(260, 0.006);
     this.audio.play('bossSpawn');
     this.analytics.track('boss_reached');
+    playtestTelemetry.recordBossReached(this.elapsedSeconds);
   }
 
   private createBossEntity(time: number): void {
@@ -1030,6 +1055,12 @@ export class GameScene extends Phaser.Scene {
       coinsEarned: calculateCoins(finalScore, this.kills, victory, this.bossDefeated),
       playerLevel: this.level,
     };
+    playtestTelemetry.completeRun({
+      result,
+      durationSeconds: this.elapsedSeconds,
+      remainingHp: Math.max(0, this.stats.currentHealth),
+    });
+    this.analytics.track('run_completed', { victory, score: finalScore, duration: this.elapsedSeconds });
     this.time.delayedCall(650, () => {
       this.physics.world.resume();
       this.scene.start('ResultScene', { save: this.save, result });

@@ -16,49 +16,55 @@ const baseResult: RunResult = {
 
 describe('persistResultAndMaybeSendScore', () => {
   it('sends a new best score only after the save succeeds', async () => {
-    const sendScore = vi.fn(async () => true);
+    const markPendingBestScore = vi.fn();
+    const synchronizePendingBestScore = vi.fn(async () => true);
     const outcome = await persistResultAndMaybeSendScore(cloneDefaultSave(), baseResult, {
       save: vi.fn(async () => true),
-      sendScore,
+      markPendingBestScore,
+      synchronizePendingBestScore,
     });
 
     expect(outcome.newBest).toBe(true);
     expect(outcome.persisted).toBe(true);
     expect(outcome.scoreSubmitted).toBe(true);
-    expect(sendScore).toHaveBeenCalledWith(1000);
+    expect(markPendingBestScore).toHaveBeenCalledWith(1000);
+    expect(synchronizePendingBestScore).toHaveBeenCalledTimes(1);
   });
 
   it('skips score submission when saving the new best fails', async () => {
-    const sendScore = vi.fn(async () => true);
+    const synchronizePendingBestScore = vi.fn(async () => true);
     const outcome = await persistResultAndMaybeSendScore(cloneDefaultSave(), baseResult, {
       save: vi.fn(async () => false),
-      sendScore,
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore,
     });
 
     expect(outcome.newBest).toBe(true);
     expect(outcome.persisted).toBe(false);
     expect(outcome.scoreSubmitted).toBe(false);
-    expect(sendScore).not.toHaveBeenCalled();
+    expect(synchronizePendingBestScore).not.toHaveBeenCalled();
   });
 
   it('does not submit score when the run is not a new best', async () => {
     const save = { ...cloneDefaultSave(), bestScore: 2500 };
-    const sendScore = vi.fn(async () => true);
+    const markPendingBestScore = vi.fn();
     const outcome = await persistResultAndMaybeSendScore(save, baseResult, {
       save: vi.fn(async () => true),
-      sendScore,
+      markPendingBestScore,
+      synchronizePendingBestScore: vi.fn(async () => false),
     });
 
     expect(outcome.newBest).toBe(false);
     expect(outcome.save.bestScore).toBe(2500);
     expect(outcome.scoreSubmitted).toBe(false);
-    expect(sendScore).not.toHaveBeenCalled();
+    expect(markPendingBestScore).not.toHaveBeenCalled();
   });
 
   it('keeps the result screen nonfatal when score submission fails after save', async () => {
     const outcome = await persistResultAndMaybeSendScore(cloneDefaultSave(), baseResult, {
       save: vi.fn(async () => true),
-      sendScore: vi.fn(async () => false),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => false),
     });
 
     expect(outcome.persisted).toBe(true);

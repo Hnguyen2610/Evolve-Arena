@@ -1,7 +1,10 @@
 import Phaser from 'phaser';
 import { UI_DEPTH } from '../config/constants';
 import { COLORS, ENEMY_COLORS } from '../config/visual';
-import { platform } from '../services/PlatformServices';
+import { gameStorage, platform } from '../services/PlatformServices';
+import { setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
+import { loadSaveOrDefault } from '../services/StorageService';
+import { loadStartupSaveAfterFirstFrame } from '../systems/StartupSystem';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -21,11 +24,28 @@ export class BootScene extends Phaser.Scene {
         strokeThickness: 6,
       })
       .setOrigin(0.5);
+    this.add
+      .text(this.scale.width / 2, this.scale.height / 2 + 48, 'Initializing...', {
+        color: '#d7edff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: '16px',
+        fontStyle: '800',
+      })
+      .setOrigin(0.5);
 
     this.game.events.once(Phaser.Core.Events.POST_RENDER, () => {
-      platform.signalFirstFrameReady();
-      this.scene.start('MenuScene');
+      void this.loadStartupSave();
     });
+  }
+
+  private async loadStartupSave(): Promise<void> {
+    const save = await loadStartupSaveAfterFirstFrame({
+      signalFirstFrameReady: () => platform.signalFirstFrameReady(),
+      initializePlatform: () => platform.initialize(),
+      loadSave: () => loadSaveOrDefault(gameStorage),
+    });
+    setLatestSaveSnapshot(save);
+    this.scene.start('MenuScene', { save });
   }
 
   private createTextures(): void {

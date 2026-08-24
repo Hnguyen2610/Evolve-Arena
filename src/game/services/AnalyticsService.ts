@@ -1,9 +1,15 @@
 export type AnalyticsEventName =
   | 'game_started'
+  | 'first_level_up'
   | 'game_over'
   | 'victory'
+  | 'upgrade_offered'
   | 'boss_reached'
   | 'boss_defeated'
+  | 'elite_killed'
+  | 'player_died'
+  | 'run_completed'
+  | 'replay_started'
   | 'upgrade_selected'
   | 'run_duration'
   | 'player_level';
