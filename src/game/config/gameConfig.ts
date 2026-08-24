@@ -7,7 +7,7 @@ import { ResultScene } from '../scenes/ResultScene';
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-root',
-  backgroundColor: '#12131f',
+  backgroundColor: '#0b1020',
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { COLORS } from '../config/visual';
 import { LocalStorageGameStorage, saveBestEffort } from '../services/StorageService';
 import type { GameSaveData, RunResult } from '../types';
 
@@ -22,6 +23,9 @@ export class ResultScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+    this.scene.stop('GameScene');
+    const previousBest = this.save.bestScore;
+    const newBest = this.result.score > previousBest;
     this.save = {
       ...this.save,
       bestScore: Math.max(this.save.bestScore, this.result.score),
@@ -32,50 +36,104 @@ export class ResultScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const centerX = width / 2;
     const shortLandscape = width > height && height < 520;
-    const title = this.result.victory ? 'Victory' : 'Run Complete';
-    const color = this.result.victory ? '#fff5a8' : '#ffffff';
+    const title = this.result.victory ? 'VICTORY' : 'RUN COMPLETE';
+    const titleColor = this.result.victory ? '#fff5a8' : COLORS.uiText;
+
+    this.addBackdrop(width, height);
+
+    const panelWidth = shortLandscape ? Math.min(760, width - 56) : Math.min(540, width - 42);
+    const panelHeight = shortLandscape ? Math.min(292, height - 52) : Math.min(520, height - 96);
+    const panelY = shortLandscape ? height / 2 : height * 0.51;
+    const panel = this.add.rectangle(centerX, panelY, panelWidth, panelHeight, COLORS.uiPanel, 0.94);
+    panel.setStrokeStyle(2, this.result.victory ? COLORS.boss : COLORS.arenaAccent, 0.54);
+    this.add.rectangle(centerX + 6, panelY + 8, panelWidth, panelHeight, 0x000000, 0.18);
+    panel.setDepth(2);
 
     this.add
-      .text(centerX, shortLandscape ? 54 : Math.max(90, height * 0.16), title, {
-        color,
-        fontSize: `${shortLandscape ? 32 : Math.min(52, Math.max(34, width * 0.055))}px`,
+      .text(centerX, panelY - panelHeight * 0.37, title, {
+        color: titleColor,
+        fontSize: `${shortLandscape ? 32 : Math.min(54, Math.max(36, width * 0.06))}px`,
         fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 7,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
 
-    const lines = [
-      `Score ${this.result.score}`,
-      `Best ${this.save.bestScore}`,
-      `Coins +${this.result.coinsEarned}   Total ${this.save.coins}`,
-      `Kills ${this.result.kills}   Elites ${this.result.eliteKills}`,
-      `Level ${this.result.playerLevel}   Time ${Math.floor(this.result.survivalSeconds)}s`,
-    ];
+    if (newBest) {
+      this.add
+        .text(centerX, panelY - panelHeight * 0.24, 'NEW BEST!', {
+          color: '#9ff7db',
+          fontSize: shortLandscape ? '15px' : '17px',
+          fontStyle: '900',
+        })
+        .setOrigin(0.5)
+        .setDepth(3);
+    }
+
+    const scoreY = panelY - panelHeight * (shortLandscape ? 0.12 : 0.1);
     this.add
-      .text(centerX, shortLandscape ? height * 0.43 : height * 0.38, lines.join('\n'), {
+      .text(centerX, scoreY, `${this.result.score}`, {
+        color: '#f7fbff',
+        fontSize: shortLandscape ? '34px' : '46px',
+        fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 6,
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+    this.add
+      .text(centerX, scoreY + (shortLandscape ? 34 : 46), `Best ${this.save.bestScore}   Coins +${this.result.coinsEarned}   Total ${this.save.coins}`, {
         color: '#dfe9ff',
-        fontSize: shortLandscape ? '16px' : '20px',
+        fontSize: shortLandscape ? '14px' : '16px',
+        fontStyle: '800',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+
+    const stats = `Kills ${this.result.kills}   Elites ${this.result.eliteKills}   Level ${this.result.playerLevel}   Time ${Math.floor(this.result.survivalSeconds)}s`;
+    this.add
+      .text(centerX, scoreY + (shortLandscape ? 62 : 78), stats, {
+        color: COLORS.uiTextMuted,
+        fontSize: shortLandscape ? '13px' : '15px',
         fontStyle: '700',
         align: 'center',
-        lineSpacing: shortLandscape ? 4 : 10,
+        wordWrap: { width: panelWidth - 42 },
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(3);
 
     if (shortLandscape) {
-      const buttonWidth = Math.min(250, width * 0.34);
-      const buttonY = height - 46;
-      this.createButton(centerX - buttonWidth * 0.58, buttonY, buttonWidth, 50, 'Replay', () => {
+      const buttonWidth = Math.min(250, width * 0.32);
+      const buttonY = panelY + panelHeight * 0.35;
+      this.createButton(centerX - buttonWidth * 0.58, buttonY, buttonWidth, 50, 'PLAY AGAIN', () => {
         this.scene.start('GameScene', { save: this.save });
       });
-      this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'Upgrades', () => {
+      this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'UPGRADES', () => {
         this.scene.start('MenuScene');
-      });
+      }, false);
     } else {
-      this.createButton(centerX, height * 0.68, Math.min(300, width - 42), 58, 'Replay', () => {
+      this.createButton(centerX, panelY + panelHeight * 0.26, Math.min(320, panelWidth - 48), 60, 'PLAY AGAIN', () => {
         this.scene.start('GameScene', { save: this.save });
       });
-      this.createButton(centerX, height * 0.8, Math.min(300, width - 42), 50, 'Upgrades', () => {
+      this.createButton(centerX, panelY + panelHeight * 0.4, Math.min(320, panelWidth - 48), 52, 'UPGRADES', () => {
         this.scene.start('MenuScene');
-      });
+      }, false);
+    }
+  }
+
+  private addBackdrop(width: number, height: number): void {
+    this.add.rectangle(width / 2, height / 2, width, height, COLORS.backgroundDeep, 1).setDepth(0);
+    this.add.circle(width * 0.25, height * 0.2, Math.min(280, width * 0.25), COLORS.playerGlow, 0.09).setDepth(1);
+    this.add.circle(width * 0.78, height * 0.72, Math.min(340, width * 0.3), COLORS.bossShell, 0.13).setDepth(1);
+    const grid = this.add.graphics().setDepth(1);
+    grid.lineStyle(1, COLORS.arenaGrid, 0.16);
+    for (let x = 0; x <= width; x += 84) {
+      grid.lineBetween(x, 0, x, height);
+    }
+    for (let y = 0; y <= height; y += 84) {
+      grid.lineBetween(0, y, width, y);
     }
   }
 
@@ -86,16 +144,24 @@ export class ResultScene extends Phaser.Scene {
     height: number,
     label: string,
     onClick: () => void,
+    primary = true,
   ): void {
-    const bg = this.add.rectangle(x, y, width, height, 0x37d399, 0.96).setStrokeStyle(2, 0xffffff, 0.22);
+    const fill = primary ? COLORS.uiPrimary : COLORS.uiPanelLight;
+    const textColor = primary ? '#07131a' : '#f7fbff';
+    this.add.rectangle(x + 5, y + 7, width, height, 0x000000, 0.24).setDepth(3);
+    const bg = this.add.rectangle(x, y, width, height, fill, 0.98).setStrokeStyle(2, 0xffffff, primary ? 0.25 : 0.14);
+    bg.setDepth(4);
     this.add
       .text(x, y, label, {
-        color: '#07131a',
-        fontSize: '21px',
+        color: textColor,
+        fontSize: height < 56 ? '17px' : '20px',
         fontStyle: '900',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(5);
     bg.setInteractive({ useHandCursor: true });
+    bg.on('pointerover', () => bg.setFillStyle(primary ? 0x54e5b1 : 0x303957, 1));
+    bg.on('pointerout', () => bg.setFillStyle(fill, 0.98));
     bg.on('pointerup', onClick);
   }
 }

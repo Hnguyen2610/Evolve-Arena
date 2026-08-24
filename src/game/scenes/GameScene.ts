@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { createPlayerStats } from '../config/balance';
 import { GAME_TIMING, UI_DEPTH, WORLD } from '../config/constants';
+import { COLORS, cssColor } from '../config/visual';
 import { ENEMY_DEFINITIONS } from '../data/enemies';
 import { Enemy } from '../entities/Enemy';
 import { ExperienceOrb } from '../entities/ExperienceOrb';
@@ -74,6 +75,7 @@ export class GameScene extends Phaser.Scene {
   private bossRecoverUntil = 0;
   private lifecyclePaused = false;
   private pendingUpgradeChoices = 0;
+  private nextMoveSparkAt = 0;
 
   constructor() {
     super('GameScene');
@@ -130,6 +132,7 @@ export class GameScene extends Phaser.Scene {
     this.lifecyclePaused = false;
     this.upgradeUi = null;
     this.pendingUpgradeChoices = 0;
+    this.nextMoveSparkAt = 0;
   }
 
   update(time: number, delta: number): void {
@@ -156,15 +159,25 @@ export class GameScene extends Phaser.Scene {
   private createWorld(): void {
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.graphics = this.add.graphics().setDepth(UI_DEPTH.world);
-    this.graphics.fillStyle(0x162131, 1);
+    this.graphics.fillStyle(COLORS.arenaBase, 1);
     this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.graphics.lineStyle(1, 0x284357, 0.45);
+    this.graphics.fillStyle(COLORS.backgroundDeep, 0.28);
+    this.graphics.fillCircle(WORLD.width * 0.22, WORLD.height * 0.18, 420);
+    this.graphics.fillCircle(WORLD.width * 0.82, WORLD.height * 0.72, 520);
+    this.graphics.lineStyle(1, COLORS.arenaGrid, 0.34);
     for (let x = 0; x <= WORLD.width; x += WORLD.tileSize) {
       this.graphics.lineBetween(x, 0, x, WORLD.height);
     }
     for (let y = 0; y <= WORLD.height; y += WORLD.tileSize) {
       this.graphics.lineBetween(0, y, WORLD.width, y);
     }
+    this.graphics.lineStyle(2, COLORS.arenaAccent, 0.3);
+    for (let x = WORLD.tileSize / 2; x <= WORLD.width; x += WORLD.tileSize * 3) {
+      this.graphics.lineBetween(x, 0, x + WORLD.height * 0.25, WORLD.height);
+    }
+    this.graphics.lineStyle(3, COLORS.arenaMark, 0.18);
+    this.graphics.strokeCircle(WORLD.width / 2, WORLD.height / 2, 260);
+    this.graphics.strokeCircle(WORLD.width / 2, WORLD.height / 2, 520);
   }
 
   private createGroups(): void {
@@ -246,6 +259,10 @@ export class GameScene extends Phaser.Scene {
     const touch = this.touchInput.getVector();
     const vector = touch.lengthSq() > 0.01 ? touch : this.desktopInput.getVector();
     this.player.applyInput(vector);
+    if (vector.lengthSq() > 0.01 && this.time.now >= this.nextMoveSparkAt) {
+      this.nextMoveSparkAt = this.time.now + 130;
+      this.createMovementSpark();
+    }
   }
 
   private updateSpawning(time: number): void {
@@ -279,6 +296,7 @@ export class GameScene extends Phaser.Scene {
     const enemy = new Enemy(this, spawn.x, spawn.y, definition, elite, scale);
     this.enemies.add(enemy);
     this.tweens.add({ targets: enemy, alpha: { from: 0.25, to: 1 }, scale: enemy.scale * 1.06, duration: 180, yoyo: true });
+    this.createSpawnFlash(enemy.x, enemy.y, elite ? COLORS.elite : definition.tint, elite ? 52 : 34);
   }
 
   private pickSpawnPoint(): Phaser.Math.Vector2 {
@@ -483,7 +501,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     projectile.hitEnemies.add(enemy);
-    this.damageEnemy(enemy, data.damage, data.knockback, true, 0);
+    this.damageEnemy(enemy, data.damage, data.knockback, true, 0, data.damage > this.stats.damage * 1.35);
     data.pierceLeft -= 1;
     if (data.pierceLeft < 0) {
       projectile.disableBody(true, true);
@@ -511,15 +529,20 @@ export class GameScene extends Phaser.Scene {
     knockback: number,
     canExplode: boolean,
     explosionDepth: number,
+    critical = false,
   ): void {
     const data = enemy.dataModel;
     data.health -= amount;
-    this.showDamage(enemy.x, enemy.y, Math.floor(amount), data.elite ? '#fff5a8' : '#ffffff');
+    this.showDamage(enemy.x, enemy.y, Math.floor(amount), critical ? cssColor(COLORS.critical) : data.elite ? '#fff5a8' : '#ffffff', critical);
     this.tweens.add({ targets: enemy, alpha: 0.45, duration: 55, yoyo: true });
     const push = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y).normalize().scale(knockback);
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
     enemy.setVelocity((body?.velocity.x ?? 0) + push.x, (body?.velocity.y ?? 0) + push.y);
     this.audio.play('hit');
+    if (critical) {
+      this.cameras.main.shake(55, 0.0025);
+      this.createBurst(enemy.x, enemy.y, COLORS.critical, 5, 'gold-spark');
+    }
 
     if (this.stats.lifesteal > 0) {
       this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + amount * this.stats.lifesteal);
@@ -557,6 +580,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (data.type === 'boss') {
+      this.cameras.main.shake(360, 0.012);
+      this.createBurst(enemy.x, enemy.y, COLORS.boss, 18, 'gold-spark');
       this.finishRun(true);
     }
   }
@@ -564,6 +589,7 @@ export class GameScene extends Phaser.Scene {
   private explode(x: number, y: number, radius: number, damage: number, chainDepth: number): void {
     const scaledRadius = radius * (1 + Math.min(chainDepth, this.stats.chainReaction) * 0.18);
     const circle = this.add.circle(x, y, scaledRadius, 0xffad5b, 0.22).setDepth(UI_DEPTH.effects);
+    circle.setStrokeStyle(2, COLORS.critical, 0.46);
     this.tweens.add({ targets: circle, scale: 1.3, alpha: 0, duration: 260, onComplete: () => circle.destroy() });
     this.enemies.getChildren().forEach((gameObject) => {
       const enemy = gameObject as Enemy;
@@ -628,6 +654,7 @@ export class GameScene extends Phaser.Scene {
     this.level = result.level;
     orb.disableBody(true, true);
     this.audio.play('xp');
+    this.createPickupBurst(orb.x, orb.y);
     if (result.levelsGained > 0) {
       const firstGainedLevel = this.level - result.levelsGained + 1;
       for (let index = 0; index < result.levelsGained; index += 1) {
@@ -677,7 +704,8 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.pause();
     this.player.setVelocity(0, 0);
     this.audio.play('levelUp');
-    this.upgradeUi = new UpgradeUI(this, options, (upgrade) => this.selectUpgrade(upgrade));
+    this.showLevelUpFlash();
+    this.upgradeUi = new UpgradeUI(this, options, this.upgrades, (upgrade) => this.selectUpgrade(upgrade));
   }
 
   private selectUpgrade(upgrade: UpgradeDefinition): void {
@@ -724,7 +752,7 @@ export class GameScene extends Phaser.Scene {
     this.nextBossChargeAt = time + 2500;
     this.nextBossRadialAt = time + 4200;
     this.cameras.main.shake(500, 0.008);
-    this.hud.showHint('Boss incoming');
+    this.showBossWarning();
     this.audio.play('bossSpawn');
     this.analytics.track('boss_reached');
   }
@@ -801,7 +829,8 @@ export class GameScene extends Phaser.Scene {
     this.bossRecoverUntil = time + 1600;
     this.nextBossChargeAt = time + GAME_TIMING.bossChargeCooldownMs;
     this.bossTelegraph?.destroy();
-    const line = this.add.rectangle(this.boss.x, this.boss.y, 420, 38, 0xff5065, 0.24).setDepth(UI_DEPTH.effects);
+    const line = this.add.rectangle(this.boss.x, this.boss.y, 460, 44, COLORS.bossDanger, 0.22).setDepth(UI_DEPTH.effects);
+    line.setStrokeStyle(2, COLORS.bossDanger, 0.5);
     line.rotation = direction.angle();
     this.bossTelegraph = line;
     this.tweens.add({ targets: line, alpha: 0, duration: 620, onComplete: () => line.destroy() });
@@ -816,7 +845,7 @@ export class GameScene extends Phaser.Scene {
     this.boss.dataModel.telegraphUntil = this.bossRadialTelegraphUntil;
     this.bossRecoverUntil = time + 980;
     this.nextBossRadialAt = time + GAME_TIMING.bossRadialCooldownMs;
-    const ring = this.add.circle(this.boss.x, this.boss.y, 72, 0xffe867, 0.12).setStrokeStyle(4, 0xffe867, 0.65);
+    const ring = this.add.circle(this.boss.x, this.boss.y, 72, COLORS.boss, 0.12).setStrokeStyle(5, COLORS.boss, 0.7);
     ring.setDepth(UI_DEPTH.effects);
     this.bossRadialRing = ring;
     this.tweens.add({
@@ -844,14 +873,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private showDamage(x: number, y: number, amount: number, color: string): void {
+  private showDamage(x: number, y: number, amount: number, color: string, critical = false): void {
     const text = this.add
-      .text(x, y, String(amount), {
+      .text(x, y, critical ? `*${amount}` : String(amount), {
         color,
-        fontSize: '16px',
+        fontSize: critical ? '20px' : '16px',
         fontStyle: '900',
-        stroke: '#11131f',
-        strokeThickness: 4,
+        stroke: '#07131a',
+        strokeThickness: critical ? 5 : 4,
       })
       .setOrigin(0.5)
       .setDepth(UI_DEPTH.effects);
@@ -864,20 +893,73 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private createBurst(x: number, y: number, color: number): void {
-    for (let i = 0; i < 7; i += 1) {
-      const spark = this.add.image(x, y, 'spark').setTint(color).setDepth(UI_DEPTH.effects);
-      const angle = (Math.PI * 2 * i) / 7;
+  private createBurst(x: number, y: number, color: number, count = 7, texture = 'spark'): void {
+    for (let i = 0; i < count; i += 1) {
+      const spark = this.add.image(x, y, texture).setTint(color).setDepth(UI_DEPTH.effects);
+      const angle = (Math.PI * 2 * i) / count;
       this.tweens.add({
         targets: spark,
-        x: x + Math.cos(angle) * Phaser.Math.Between(24, 58),
-        y: y + Math.sin(angle) * Phaser.Math.Between(24, 58),
+        x: x + Math.cos(angle) * Phaser.Math.Between(24, count > 10 ? 88 : 58),
+        y: y + Math.sin(angle) * Phaser.Math.Between(24, count > 10 ? 88 : 58),
         alpha: 0,
         scale: 0.25,
         duration: 320,
         onComplete: () => spark.destroy(),
       });
     }
+  }
+
+  private createSpawnFlash(x: number, y: number, color: number, radius: number): void {
+    const ring = this.add.circle(x, y, radius, color, 0).setStrokeStyle(3, color, 0.42).setDepth(UI_DEPTH.effects);
+    this.tweens.add({ targets: ring, scale: 1.35, alpha: 0, duration: 280, onComplete: () => ring.destroy() });
+  }
+
+  private createPickupBurst(x: number, y: number): void {
+    const flash = this.add.circle(x, y, 14, COLORS.xp, 0.18).setDepth(UI_DEPTH.effects);
+    this.tweens.add({ targets: flash, scale: 1.9, alpha: 0, duration: 220, onComplete: () => flash.destroy() });
+  }
+
+  private createMovementSpark(): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body | null;
+    const speedSq = body ? body.velocity.lengthSq() : 0;
+    if (speedSq < 10) {
+      return;
+    }
+    const angle = body?.velocity.angle() ?? 0;
+    const spark = this.add.image(
+      this.player.x - Math.cos(angle) * 18 + Phaser.Math.Between(-5, 5),
+      this.player.y - Math.sin(angle) * 18 + Phaser.Math.Between(-5, 5),
+      'spark',
+    );
+    spark.setTint(COLORS.playerProjectileCore).setDepth(UI_DEPTH.effects).setAlpha(0.56).setScale(0.8);
+    this.tweens.add({ targets: spark, alpha: 0, scale: 0.15, duration: 260, onComplete: () => spark.destroy() });
+  }
+
+  private showLevelUpFlash(): void {
+    const flash = this.add.rectangle(0, 0, this.scale.width, this.scale.height, COLORS.xpBar, 0.08).setOrigin(0).setScrollFactor(0);
+    flash.setDepth(UI_DEPTH.overlay - 2);
+    this.tweens.add({ targets: flash, alpha: 0, duration: 260, onComplete: () => flash.destroy() });
+  }
+
+  private showBossWarning(): void {
+    const shortLandscape = this.scale.width > this.scale.height && this.scale.height < 520;
+    const width = Math.min(this.scale.width - 48, 520);
+    const y = shortLandscape ? 154 : this.scale.height * 0.18;
+    const banner = this.add.rectangle(this.scale.width / 2, y, width, shortLandscape ? 34 : 44, COLORS.bossDanger, 0.18);
+    const text = this.add
+      .text(this.scale.width / 2, y, 'BOSS INCOMING', {
+        color: '#fff5a8',
+        fontSize: this.scale.width < 520 || shortLandscape ? '18px' : '22px',
+        fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5);
+    [banner, text].forEach((item) => item.setScrollFactor(0).setDepth(UI_DEPTH.hud + 5));
+    this.tweens.add({ targets: [banner, text], alpha: 0, delay: 760, duration: 320, onComplete: () => {
+      banner.destroy();
+      text.destroy();
+    } });
   }
 
   private updateHud(): void {

@@ -3,6 +3,8 @@ import type { EnemyDefinition, EnemyRuntimeData } from '../types';
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   dataModel: EnemyRuntimeData;
+  private readonly eliteRing?: Phaser.GameObjects.Image;
+  private readonly glow?: Phaser.GameObjects.Image;
 
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
     super(scene, x, y, definition.type === 'boss' ? 'boss' : `enemy-${definition.type}`);
@@ -29,7 +31,28 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(definition.type === 'boss' ? 9 : 8);
     this.setTint(elite ? 0xffffff : definition.tint);
     this.setScale(elite ? 1.28 : 1);
+    if (definition.type === 'boss') {
+      this.glow = scene.add.image(x, y, 'boss-glow').setDepth(7).setAlpha(0.42);
+    } else if (elite) {
+      this.eliteRing = scene.add.image(x, y, 'elite-ring').setDepth(7).setAlpha(0.92).setScale(0.78);
+    }
     const diameter = definition.radius * 2;
     this.setCircle(definition.radius, (this.width - diameter) / 2, (this.height - diameter) / 2);
+  }
+
+  preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    if (this.eliteRing) {
+      this.eliteRing.setPosition(this.x, this.y).setRotation(-time / 520).setScale(this.scale * 0.84);
+    }
+    if (this.glow) {
+      this.glow.setPosition(this.x, this.y).setScale(this.scale * (1.02 + Math.sin(time / 240) * 0.035));
+    }
+  }
+
+  destroy(fromScene?: boolean): void {
+    this.eliteRing?.destroy();
+    this.glow?.destroy();
+    super.destroy(fromScene);
   }
 }

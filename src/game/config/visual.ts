@@ -1,0 +1,63 @@
+import type { UpgradeRarity } from '../types';
+
+export const COLORS = {
+  background: 0x0b1020,
+  backgroundDeep: 0x070a14,
+  arenaBase: 0x111b2c,
+  arenaGrid: 0x29445f,
+  arenaAccent: 0x203b53,
+  arenaMark: 0x58d8ff,
+  player: 0x63e7ff,
+  playerCore: 0xf2feff,
+  playerGlow: 0x44d8ff,
+  playerProjectile: 0xc8fbff,
+  playerProjectileCore: 0x65e8ff,
+  enemyProjectile: 0xff405d,
+  enemyProjectileCore: 0xffd1dc,
+  xp: 0x69ff9a,
+  xpCore: 0xf4fff6,
+  health: 0x5bea83,
+  lowHealth: 0xff4f6b,
+  xpBar: 0x62d8ff,
+  damage: 0xffffff,
+  critical: 0xfff06c,
+  playerDamage: 0xff91a6,
+  warning: 0xff4f65,
+  boss: 0xffee58,
+  bossShell: 0x4a347d,
+  bossDanger: 0xff405d,
+  elite: 0xfff06c,
+  uiPanel: 0x151b2d,
+  uiPanelDark: 0x0a0f1d,
+  uiPanelLight: 0x242c45,
+  uiPrimary: 0x39d99c,
+  uiPrimaryDark: 0x15966f,
+  uiMuted: 0x8ea0bc,
+  uiText: '#f7fbff',
+  uiTextMuted: '#b9c7dc',
+  uiTextDark: '#07131a',
+  uiCyan: '#9ff7db',
+};
+
+export const ENEMY_COLORS = {
+  basic: { fill: 0xff5d66, core: 0xffb4bd, stroke: 0x3b1721 },
+  runner: { fill: 0xffbe3d, core: 0xfff0a3, stroke: 0x4a2607 },
+  tank: { fill: 0x8068ff, core: 0xdcd4ff, stroke: 0x211a4c },
+  ranged: { fill: 0x39d2a2, core: 0xd6fff4, stroke: 0x123d34 },
+  swarm: { fill: 0xff75ca, core: 0xffd4ef, stroke: 0x4a1939 },
+};
+
+export const RARITY_COLORS: Record<UpgradeRarity, {
+  fill: number;
+  stroke: number;
+  glow: number;
+  label: string;
+}> = {
+  common: { fill: 0x1c3e38, stroke: 0x65e7c3, glow: 0x1b7a68, label: '#9ff7db' },
+  rare: { fill: 0x193f61, stroke: 0x68ccff, glow: 0x236a99, label: '#9addff' },
+  epic: { fill: 0x44306f, stroke: 0xd8a7ff, glow: 0x7c45d8, label: '#e9c6ff' },
+};
+
+export function cssColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
+}

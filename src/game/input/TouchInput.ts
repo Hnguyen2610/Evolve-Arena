@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { UI_DEPTH } from '../config/constants';
+import { COLORS } from '../config/visual';
 
 export class TouchInput {
   private readonly scene: Phaser.Scene;
@@ -12,8 +13,16 @@ export class TouchInput {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.base = scene.add.circle(0, 0, this.radius, 0xffffff, 0.12).setScrollFactor(0).setDepth(UI_DEPTH.hud);
-    this.knob = scene.add.circle(0, 0, 22, 0xffffff, 0.45).setScrollFactor(0).setDepth(UI_DEPTH.hud + 1);
+    this.base = scene.add
+      .circle(0, 0, this.radius, COLORS.playerGlow, 0.12)
+      .setStrokeStyle(2, COLORS.playerGlow, 0.36)
+      .setScrollFactor(0)
+      .setDepth(UI_DEPTH.hud);
+    this.knob = scene.add
+      .circle(0, 0, 22, COLORS.playerCore, 0.48)
+      .setStrokeStyle(2, COLORS.playerGlow, 0.72)
+      .setScrollFactor(0)
+      .setDepth(UI_DEPTH.hud + 1);
     this.hide();
 
     scene.input.on('pointerdown', this.handleDown, this);
