@@ -8,16 +8,16 @@ export function addXp(
   currentXp: number,
   level: number,
   gainedXp: number,
-): { xp: number; level: number; leveled: boolean } {
+): { xp: number; level: number; leveled: boolean; levelsGained: number } {
   let xp = currentXp + gainedXp;
   let nextLevel = level;
-  let leveled = false;
+  let levelsGained = 0;
 
   while (xp >= getRequiredXp(nextLevel)) {
     xp -= getRequiredXp(nextLevel);
     nextLevel += 1;
-    leveled = true;
+    levelsGained += 1;
   }
 
-  return { xp, level: nextLevel, leveled };
+  return { xp, level: nextLevel, leveled: levelsGained > 0, levelsGained };
 }

@@ -10,12 +10,33 @@ export interface GameStorage {
 
 export class LocalStorageGameStorage implements GameStorage {
   async load(): Promise<GameSaveData> {
-    const raw = window.localStorage.getItem(SAVE_KEY);
-    return parseSaveData(raw);
+    try {
+      const raw = window.localStorage.getItem(SAVE_KEY);
+      return parseSaveData(raw);
+    } catch {
+      return cloneDefaultSave();
+    }
   }
 
   async save(data: GameSaveData): Promise<void> {
     window.localStorage.setItem(SAVE_KEY, JSON.stringify(normalizeSaveData(data)));
+  }
+}
+
+export async function loadSaveOrDefault(storage: GameStorage): Promise<GameSaveData> {
+  try {
+    return await storage.load();
+  } catch {
+    return cloneDefaultSave();
+  }
+}
+
+export async function saveBestEffort(storage: GameStorage, data: GameSaveData): Promise<boolean> {
+  try {
+    await storage.save(data);
+    return true;
+  } catch {
+    return false;
   }
 }
 

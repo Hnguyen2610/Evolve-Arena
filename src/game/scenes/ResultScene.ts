@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { LocalStorageGameStorage } from '../services/StorageService';
+import { LocalStorageGameStorage, saveBestEffort } from '../services/StorageService';
 import type { GameSaveData, RunResult } from '../types';
 
 interface ResultSceneData {
@@ -27,11 +27,7 @@ export class ResultScene extends Phaser.Scene {
       bestScore: Math.max(this.save.bestScore, this.result.score),
       coins: this.save.coins + this.result.coinsEarned,
     };
-    try {
-      await this.storage.save(this.save);
-    } catch {
-      // The result screen must still render if browser storage is unavailable.
-    }
+    await saveBestEffort(this.storage, this.save);
 
     const { width, height } = this.scale;
     const centerX = width / 2;

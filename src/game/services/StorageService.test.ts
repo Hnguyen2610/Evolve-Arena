@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSaveData } from './StorageService';
+import { cloneDefaultSave, loadSaveOrDefault, parseSaveData, saveBestEffort, type GameStorage } from './StorageService';
 
 describe('StorageService', () => {
   it('returns defaults for missing or corrupted saves', () => {
@@ -29,5 +29,31 @@ describe('StorageService', () => {
     expect(save.permanentUpgrades.damage).toBe(20);
     expect(save.permanentUpgrades.health).toBe(0);
     expect(save.permanentUpgrades.speed).toBe(15);
+  });
+
+  it('falls back to defaults when a storage adapter cannot load', async () => {
+    const throwingStorage: GameStorage = {
+      async load() {
+        throw new Error('blocked');
+      },
+      async save() {
+        throw new Error('blocked');
+      },
+    };
+
+    await expect(loadSaveOrDefault(throwingStorage)).resolves.toEqual(cloneDefaultSave());
+  });
+
+  it('reports save failures without throwing', async () => {
+    const throwingStorage: GameStorage = {
+      async load() {
+        return cloneDefaultSave();
+      },
+      async save() {
+        throw new Error('quota');
+      },
+    };
+
+    await expect(saveBestEffort(throwingStorage, cloneDefaultSave())).resolves.toBe(false);
   });
 });

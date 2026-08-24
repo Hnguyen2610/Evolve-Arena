@@ -13,5 +13,15 @@ describe('LevelSystem', () => {
     expect(result.level).toBe(2);
     expect(result.xp).toBe(5);
     expect(result.leveled).toBe(true);
+    expect(result.levelsGained).toBe(1);
+  });
+
+  it('reports every level gained from a large XP pickup', () => {
+    const gainedXp = getRequiredXp(1) + getRequiredXp(2) + getRequiredXp(3) + 7;
+    const result = addXp(0, 1, gainedXp);
+    expect(result.level).toBe(4);
+    expect(result.xp).toBe(7);
+    expect(result.leveled).toBe(true);
+    expect(result.levelsGained).toBe(3);
   });
 });

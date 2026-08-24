@@ -73,6 +73,7 @@ export class GameScene extends Phaser.Scene {
   private bossRadialRing: Phaser.GameObjects.Arc | null = null;
   private bossRecoverUntil = 0;
   private lifecyclePaused = false;
+  private pendingUpgradeChoices = 0;
 
   constructor() {
     super('GameScene');
@@ -128,6 +129,7 @@ export class GameScene extends Phaser.Scene {
     this.bossRecoverUntil = 0;
     this.lifecyclePaused = false;
     this.upgradeUi = null;
+    this.pendingUpgradeChoices = 0;
   }
 
   update(time: number, delta: number): void {
@@ -626,9 +628,13 @@ export class GameScene extends Phaser.Scene {
     this.level = result.level;
     orb.disableBody(true, true);
     this.audio.play('xp');
-    if (result.leveled) {
-      this.analytics.track('player_level', { level: this.level });
-      this.openUpgradeSelection();
+    if (result.levelsGained > 0) {
+      const firstGainedLevel = this.level - result.levelsGained + 1;
+      for (let index = 0; index < result.levelsGained; index += 1) {
+        this.analytics.track('player_level', { level: firstGainedLevel + index });
+      }
+      this.pendingUpgradeChoices += result.levelsGained;
+      this.openNextUpgradeSelection();
     }
   }
 
@@ -654,11 +660,19 @@ export class GameScene extends Phaser.Scene {
     return value;
   }
 
-  private openUpgradeSelection(): void {
-    const options = pickUpgradeOptions(this.upgrades, 3);
-    if (options.length === 0) {
+  private openNextUpgradeSelection(): void {
+    if (this.upgradeUi || this.pendingUpgradeChoices <= 0 || this.mode === 'game-over' || this.mode === 'victory') {
       return;
     }
+
+    const options = pickUpgradeOptions(this.upgrades, 3);
+    if (options.length === 0) {
+      this.pendingUpgradeChoices = 0;
+      this.mode = 'playing';
+      this.physics.world.resume();
+      return;
+    }
+    this.pendingUpgradeChoices -= 1;
     this.mode = 'level-up';
     this.physics.world.pause();
     this.player.setVelocity(0, 0);
@@ -671,9 +685,13 @@ export class GameScene extends Phaser.Scene {
     this.analytics.track('upgrade_selected', { id: upgrade.id, level: this.upgrades[upgrade.id] ?? 0 });
     this.upgradeUi?.destroy();
     this.upgradeUi = null;
+    this.hud.showHint(upgrade.name);
+    if (this.pendingUpgradeChoices > 0) {
+      this.openNextUpgradeSelection();
+      return;
+    }
     this.mode = 'playing';
     this.physics.world.resume();
-    this.hud.showHint(upgrade.name);
   }
 
   private updateProjectiles(time: number): void {
