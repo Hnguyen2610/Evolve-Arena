@@ -14,11 +14,11 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: 'attack-speed',
     name: 'Attack Speed',
-    description: '+16% fire rate',
+    description: '+14% fire rate',
     maxLevel: 7,
     rarity: 'common',
     apply: (stats) => {
-      stats.attackSpeed *= 1.16;
+      stats.attackSpeed *= 1.14;
     },
   },
   {
@@ -34,22 +34,22 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: 'max-hp',
     name: 'Vital Core',
-    description: '+24 max HP and heal',
+    description: '+28 max HP and heal',
     maxLevel: 5,
     rarity: 'common',
     apply: (stats) => {
-      stats.maxHealth += 24;
-      stats.currentHealth = Math.min(stats.maxHealth, stats.currentHealth + 24);
+      stats.maxHealth += 28;
+      stats.currentHealth = Math.min(stats.maxHealth, stats.currentHealth + 28);
     },
   },
   {
     id: 'magnet',
     name: 'Magnet Field',
-    description: '+55 XP pickup range',
+    description: '+70 XP pickup range',
     maxLevel: 5,
     rarity: 'common',
     apply: (stats) => {
-      stats.magnetRange += 55;
+      stats.magnetRange += 70;
     },
   },
   {

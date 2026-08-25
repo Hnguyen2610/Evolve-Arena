@@ -137,8 +137,10 @@ export class ResultScene extends Phaser.Scene {
 
   private addBackdrop(width: number, height: number): void {
     this.add.rectangle(width / 2, height / 2, width, height, COLORS.backgroundDeep, 1).setDepth(0);
-    this.add.circle(width * 0.25, height * 0.2, Math.min(280, width * 0.25), COLORS.playerGlow, 0.09).setDepth(1);
-    this.add.circle(width * 0.78, height * 0.72, Math.min(340, width * 0.3), COLORS.bossShell, 0.13).setDepth(1);
+    const playerAura = this.add.circle(width * 0.25, height * 0.2, Math.min(280, width * 0.25), COLORS.playerGlow, 0.09).setDepth(1);
+    const bossAura = this.add.circle(width * 0.78, height * 0.72, Math.min(340, width * 0.3), COLORS.bossShell, 0.13).setDepth(1);
+    this.tweens.add({ targets: playerAura, scale: 1.05, alpha: 0.13, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    this.tweens.add({ targets: bossAura, scale: 1.05, alpha: this.result.victory ? 0.18 : 0.11, duration: 2100, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     const grid = this.add.graphics().setDepth(1);
     grid.lineStyle(1, COLORS.arenaGrid, 0.16);
     for (let x = 0; x <= width; x += 84) {

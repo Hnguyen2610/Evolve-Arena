@@ -36,7 +36,12 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     const diameter = radius * 2;
     this.setCircle(radius, (this.width - diameter) / 2, (this.height - diameter) / 2);
     this.setRotation(angle);
-    this.trail.setVisible(true).setRotation(angle).setScale(data.size).setAlpha(data.owner === 'player' ? 0.42 : 0.55);
+    const playerPower = data.owner === 'player' ? Phaser.Math.Clamp(data.damage / 42, 0.85, 1.7) : 1;
+    this.trail
+      .setVisible(true)
+      .setRotation(angle)
+      .setScale(data.size * playerPower, data.size)
+      .setAlpha(data.owner === 'player' ? 0.34 + Math.min(0.24, data.size * 0.07 + playerPower * 0.06) : 0.55);
     this.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
   }
 
@@ -48,6 +53,9 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     }
     this.trail.setPosition(this.x - Math.cos(this.rotation) * 13, this.y - Math.sin(this.rotation) * 13);
     this.trail.setRotation(this.rotation);
+    if (this.projectileData.owner === 'player') {
+      this.trail.setAlpha(0.36 + Math.sin(time / 90) * 0.08 + Math.min(0.16, this.projectileData.size * 0.04));
+    }
   }
 
   disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {

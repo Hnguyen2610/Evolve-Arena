@@ -1,11 +1,17 @@
 import Phaser from 'phaser';
+import { COLORS } from '../config/visual';
 import type { EnemyDefinition, EnemyRuntimeData } from '../types';
+import { addGlowFx, addShadowFx } from '../utils/phaserFx';
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   dataModel: EnemyRuntimeData;
   private readonly eliteRing?: Phaser.GameObjects.Image;
   private readonly glow?: Phaser.GameObjects.Image;
   private readonly bossRing?: Phaser.GameObjects.Image;
+  private readonly shadow: Phaser.GameObjects.Ellipse;
+  private readonly baseDisplayScale: number;
+  private readonly fxGlow: Phaser.FX.Glow | null;
+  private readonly fxShadow: Phaser.FX.Shadow | null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
     super(scene, x, y, definition.type === 'boss' ? 'boss' : `enemy-${definition.type}`);
@@ -32,11 +38,22 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(definition.type === 'boss' ? 9 : 8);
     this.setTint(elite ? 0xffffff : definition.tint);
     this.setScale(elite ? 1.28 : 1);
+    this.baseDisplayScale = elite ? 1.28 : 1;
+    this.shadow = scene.add
+      .ellipse(x, y + definition.radius * 0.58, definition.radius * (elite ? 2.25 : 1.85), definition.radius * 0.72, definition.type === 'boss' ? COLORS.boss : definition.tint, definition.type === 'boss' ? 0.18 : 0.12)
+      .setDepth(6);
     if (definition.type === 'boss') {
       this.glow = scene.add.image(x, y, 'boss-glow').setDepth(7).setAlpha(0.42);
       this.bossRing = scene.add.image(x, y, 'boss-ring').setDepth(8).setAlpha(0.9);
+      this.fxGlow = addGlowFx(scene, this, COLORS.boss, 1.4, 0.18);
+      this.fxShadow = addShadowFx(scene, this, COLORS.boss, 0.24);
     } else if (elite) {
       this.eliteRing = scene.add.image(x, y, 'elite-ring').setDepth(7).setAlpha(0.92).setScale(0.78);
+      this.fxGlow = addGlowFx(scene, this, COLORS.elite, 0.72, 0.06);
+      this.fxShadow = null;
+    } else {
+      this.fxGlow = null;
+      this.fxShadow = null;
     }
     const diameter = definition.radius * 2;
     this.setCircle(definition.radius, (this.width - diameter) / 2, (this.height - diameter) / 2);
@@ -44,20 +61,77 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+    this.updateBodyMotion(time);
+    this.shadow
+      .setPosition(this.x, this.y + this.dataModel.radius * 0.58)
+      .setScale(this.scaleX * (this.dataModel.type === 'boss' ? 1.18 : 1), Math.max(0.75, this.scaleY))
+      .setVisible(this.active);
     if (this.eliteRing) {
-      this.eliteRing.setPosition(this.x, this.y).setRotation(-time / 520).setScale(this.scale * 0.84);
+      this.eliteRing
+        .setPosition(this.x, this.y)
+        .setRotation(-time / 520)
+        .setScale(this.scaleX * (0.84 + Math.sin(time / 260) * 0.035))
+        .setVisible(this.active);
+      if (this.fxGlow) {
+        this.fxGlow.outerStrength = 0.62 + Math.sin(time / 260) * 0.18;
+      }
     }
     if (this.glow) {
-      this.glow.setPosition(this.x, this.y).setScale(this.scale * (1.04 + Math.sin(time / 240) * 0.04)).setVisible(this.active);
+      const healthRatio = Phaser.Math.Clamp(this.dataModel.health / this.dataModel.maxHealth, 0, 1);
+      const instability = 1 - healthRatio;
+      this.glow
+        .setPosition(this.x, this.y)
+        .setScale(this.scaleX * (1.04 + Math.sin(time / (240 - instability * 90)) * (0.04 + instability * 0.05)))
+        .setAlpha(0.35 + instability * 0.26)
+        .setVisible(this.active);
+      if (this.fxGlow) {
+        this.fxGlow.outerStrength = 1.2 + instability * 1.1;
+        this.fxGlow.innerStrength = 0.16 + instability * 0.18;
+      }
+      if (this.fxShadow) {
+        this.fxShadow.intensity = 0.18 + instability * 0.16;
+      }
     }
     if (this.bossRing) {
       const charging = this.dataModel.telegraphUntil > time || this.dataModel.chargeUntil > time;
+      const healthRatio = Phaser.Math.Clamp(this.dataModel.health / this.dataModel.maxHealth, 0, 1);
+      const instability = 1 - healthRatio;
       this.bossRing
         .setPosition(this.x, this.y)
-        .setRotation(time / (charging ? 260 : 720))
-        .setScale(this.scale * (1.02 + Math.sin(time / 190) * (charging ? 0.035 : 0.018)))
-        .setAlpha(charging ? 1 : 0.86)
+        .setRotation(time / (charging ? 230 : 720 - instability * 240))
+        .setScale(this.scaleX * (1.02 + Math.sin(time / 190) * (charging ? 0.045 : 0.018 + instability * 0.02)))
+        .setAlpha(charging ? 1 : 0.76 + instability * 0.18)
         .setVisible(this.active);
+    }
+  }
+
+  private updateBodyMotion(time: number): void {
+    const data = this.dataModel;
+    if (data.type === 'boss') {
+      const healthRatio = Phaser.Math.Clamp(data.health / data.maxHealth, 0, 1);
+      const instability = 1 - healthRatio;
+      const charging = data.telegraphUntil > time || data.chargeUntil > time;
+      const pulse = Math.sin(time / (charging ? 120 : 260 - instability * 90));
+      this.setScale(this.baseDisplayScale * (1 + pulse * (0.018 + instability * 0.018)));
+      return;
+    }
+
+    const life = Number(this.getData('lifeSeconds')) || 0;
+    const phase = time / 1000 + life + this.x * 0.003;
+    if (data.behavior === 'runner') {
+      const stretch = 1 + Math.sin(time / 115) * 0.055;
+      this.setScale(this.baseDisplayScale * (0.96 + stretch * 0.04), this.baseDisplayScale * (1.03 + stretch * 0.08));
+    } else if (data.behavior === 'tank') {
+      const weight = Math.sin(time / 420 + this.y * 0.004);
+      this.setScale(this.baseDisplayScale * (1.02 + weight * 0.018), this.baseDisplayScale * (0.98 - weight * 0.012));
+    } else if (data.behavior === 'ranged') {
+      const charging = data.nextAttackAt > time && data.nextAttackAt - time < 380;
+      const chargePulse = charging ? Math.sin(time / 70) * 0.055 : Math.sin(phase * 2.1) * 0.018;
+      this.setScale(this.baseDisplayScale * (1 + chargePulse));
+    } else if (data.behavior === 'swarm') {
+      this.setScale(this.baseDisplayScale * (1 + Math.sin(time / 80 + this.x) * 0.045));
+    } else {
+      this.setScale(this.baseDisplayScale * (1 + Math.sin(phase * 2.4) * 0.024));
     }
   }
 
@@ -66,6 +140,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.eliteRing?.setVisible(false);
     this.glow?.setVisible(false);
     this.bossRing?.setVisible(false);
+    this.shadow.setVisible(false);
     return this;
   }
 
@@ -73,6 +148,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.eliteRing?.destroy();
     this.glow?.destroy();
     this.bossRing?.destroy();
+    this.shadow.destroy();
     super.destroy(fromScene);
   }
 }

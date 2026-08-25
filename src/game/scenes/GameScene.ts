@@ -51,6 +51,8 @@ export class GameScene extends Phaser.Scene {
   private enemyProjectiles!: Phaser.Physics.Arcade.Group;
   private xpOrbs!: Phaser.Physics.Arcade.Group;
   private graphics!: Phaser.GameObjects.Graphics;
+  private arenaFx!: Phaser.GameObjects.Graphics;
+  private foregroundFx!: Phaser.GameObjects.Graphics;
   private audio = gameAudio;
   private analytics = new MemoryAnalyticsService();
   private replayStart = false;
@@ -77,6 +79,8 @@ export class GameScene extends Phaser.Scene {
   private bossRecoverUntil = 0;
   private pendingUpgradeChoices = 0;
   private nextMoveSparkAt = 0;
+  private arenaVisualPhase = -1;
+  private nextAmbientSparkAt = 0;
 
   constructor() {
     super('GameScene');
@@ -96,6 +100,7 @@ export class GameScene extends Phaser.Scene {
     this.createWorld();
     this.createGroups();
     this.player = new Player(this, WORLD.width / 2, WORLD.height / 2, this.stats);
+    this.player.updateEvolutionVisuals(this.upgrades);
     this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height).startFollow(this.player, true, 0.12, 0.12);
     this.desktopInput = new DesktopInput(this);
     this.touchInput = new TouchInput(this);
@@ -133,6 +138,8 @@ export class GameScene extends Phaser.Scene {
     this.upgradeUi = null;
     this.pendingUpgradeChoices = 0;
     this.nextMoveSparkAt = 0;
+    this.arenaVisualPhase = -1;
+    this.nextAmbientSparkAt = 0;
   }
 
   update(time: number, delta: number): void {
@@ -142,6 +149,7 @@ export class GameScene extends Phaser.Scene {
 
     const deltaSeconds = delta / 1000;
     this.elapsedSeconds += deltaSeconds;
+    this.updateArenaVisuals(time);
     this.updatePlayer();
     this.updateSpawning(time);
     this.updateEnemies(time, deltaSeconds);
@@ -198,6 +206,134 @@ export class GameScene extends Phaser.Scene {
     this.graphics.strokeCircle(centerX, centerY, 150);
     this.graphics.fillStyle(COLORS.arenaMark, 0.06);
     this.graphics.fillCircle(centerX, centerY, 92);
+    this.arenaFx = this.add.graphics().setDepth(UI_DEPTH.world + 1);
+    this.foregroundFx = this.add.graphics().setDepth(UI_DEPTH.effects - 1);
+  }
+
+  private updateArenaVisuals(time: number): void {
+    const phase = this.getArenaVisualPhase();
+    if (phase !== this.arenaVisualPhase) {
+      if (this.arenaVisualPhase >= 0) {
+        this.createArenaPhasePulse(phase);
+      }
+      this.arenaVisualPhase = phase;
+    }
+
+    const camera = this.cameras.main;
+    const left = camera.scrollX;
+    const top = camera.scrollY;
+    const width = camera.width;
+    const height = camera.height;
+    const centerX = WORLD.width / 2;
+    const centerY = WORLD.height / 2;
+    const bossPhase = phase >= 3;
+    const color = bossPhase ? COLORS.boss : phase >= 2 ? COLORS.arenaPhase3 : phase >= 1 ? COLORS.arenaPhase2 : COLORS.arenaMark;
+    const intensity = 0.18 + phase * 0.2 + (bossPhase ? 0.18 : 0);
+    const scanOffset = (time / (34 - Math.min(phase, 2) * 6)) % WORLD.tileSize;
+
+    this.arenaFx.clear();
+    this.arenaFx.lineStyle(1, color, 0.05 + intensity * 0.08);
+    for (let y = top - WORLD.tileSize + scanOffset; y < top + height + WORLD.tileSize; y += WORLD.tileSize) {
+      this.arenaFx.lineBetween(left - 80, y, left + width + 80, y + phase * 10);
+    }
+    this.arenaFx.lineStyle(2, color, 0.06 + intensity * 0.1);
+    for (let i = 0; i < 4 + phase; i += 1) {
+      const radius = 210 + i * 155 + Math.sin(time / 680 + i) * (10 + phase * 6);
+      this.arenaFx.strokeCircle(centerX, centerY, radius);
+    }
+    if (phase >= 1) {
+      this.arenaFx.lineStyle(2, COLORS.arenaPhase2, 0.09 + phase * 0.035);
+      for (let i = 0; i < 7; i += 1) {
+        const angle = time / 2300 + (Math.PI * 2 * i) / 7;
+        this.arenaFx.lineBetween(
+          centerX + Math.cos(angle) * 190,
+          centerY + Math.sin(angle) * 190,
+          centerX + Math.cos(angle) * (620 + phase * 90),
+          centerY + Math.sin(angle) * (620 + phase * 90),
+        );
+      }
+    }
+    if (phase >= 2) {
+      this.arenaFx.lineStyle(3, COLORS.arenaPhase3, 0.11 + (bossPhase ? 0.06 : 0));
+      for (let i = 0; i < 5; i += 1) {
+        const angle = -time / 1900 + (Math.PI * 2 * i) / 5;
+        const x = centerX + Math.cos(angle) * 520;
+        const y = centerY + Math.sin(angle) * 360;
+        this.arenaFx.lineBetween(x - 54, y + 18, x + 72, y - 26);
+      }
+    }
+    if (this.boss?.active) {
+      this.arenaFx.lineStyle(4, COLORS.boss, 0.18 + Math.sin(time / 170) * 0.05);
+      this.arenaFx.strokeCircle(this.boss.x, this.boss.y, 150 + Math.sin(time / 210) * 9);
+      this.arenaFx.lineStyle(2, COLORS.bossDanger, 0.2);
+      this.arenaFx.strokeCircle(this.boss.x, this.boss.y, 236 + Math.sin(time / 360) * 18);
+    }
+
+    this.foregroundFx.clear();
+    if (phase > 0) {
+      this.foregroundFx.fillStyle(COLORS.arenaForeground, 0.05 + phase * 0.012);
+      const particleCount = camera.width < 700 ? 8 + phase * 2 : 12 + phase * 3;
+      for (let i = 0; i < particleCount; i += 1) {
+        const seed = i * 113.37;
+        const x = left + ((seed + time * (0.012 + phase * 0.004)) % (width + 80)) - 40;
+        const y = top + (((seed * 1.73) + time * (0.018 + phase * 0.005)) % (height + 80)) - 40;
+        this.foregroundFx.fillCircle(x, y, 1.4 + (i % 3) * 0.7);
+      }
+    }
+
+    if (phase > 0 && time >= this.nextAmbientSparkAt) {
+      this.nextAmbientSparkAt = time + Math.max(260, 680 - phase * 130);
+      this.createAmbientSpark(color, phase);
+    }
+  }
+
+  private getArenaVisualPhase(): number {
+    if (this.bossSpawned && !this.bossDefeated) {
+      return 3;
+    }
+    if (this.elapsedSeconds >= 60) {
+      return 2;
+    }
+    if (this.elapsedSeconds >= 30) {
+      return 1;
+    }
+    return 0;
+  }
+
+  private createArenaPhasePulse(phase: number): void {
+    const camera = this.cameras.main;
+    const x = camera.scrollX + camera.width / 2;
+    const y = camera.scrollY + camera.height / 2;
+    const color = phase >= 3 ? COLORS.boss : phase >= 2 ? COLORS.arenaPhase3 : COLORS.arenaPhase2;
+    const radius = Math.min(camera.width, camera.height) * 0.18;
+    const ring = this.add.circle(x, y, radius, color, 0).setDepth(UI_DEPTH.effects - 2);
+    ring.setStrokeStyle(4, color, phase >= 3 ? 0.46 : 0.28);
+    this.tweens.add({
+      targets: ring,
+      scale: phase >= 3 ? 5.8 : 4.2,
+      alpha: 0,
+      duration: phase >= 3 ? 820 : 560,
+      ease: 'Sine.Out',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private createAmbientSpark(color: number, phase: number): void {
+    const camera = this.cameras.main;
+    const count = camera.width < 700 ? 1 : Math.min(3, phase);
+    for (let index = 0; index < count; index += 1) {
+      const x = camera.scrollX + Phaser.Math.Between(40, Math.max(41, camera.width - 40));
+      const y = camera.scrollY + Phaser.Math.Between(40, Math.max(41, camera.height - 40));
+      const spark = this.add.image(x, y, phase >= 3 ? 'gold-spark' : 'spark').setTint(color).setDepth(UI_DEPTH.effects - 1).setAlpha(0.24);
+      this.tweens.add({
+        targets: spark,
+        y: y - Phaser.Math.Between(24, 52),
+        alpha: 0,
+        scale: 0.12,
+        duration: 520,
+        onComplete: () => spark.destroy(),
+      });
+    }
   }
 
   private createGroups(): void {
@@ -539,6 +675,7 @@ export class GameScene extends Phaser.Scene {
     const data = enemy.dataModel;
     data.health -= amount;
     this.showDamage(enemy.x, enemy.y, Math.floor(amount), critical ? cssColor(COLORS.critical) : data.elite ? '#fff5a8' : '#ffffff', critical);
+    this.createHitImpact(enemy, critical);
     this.tweens.add({ targets: enemy, alpha: 0.45, duration: 55, yoyo: true });
     const push = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y).normalize().scale(knockback);
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
@@ -551,6 +688,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.stats.lifesteal > 0) {
       this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + amount * this.stats.lifesteal);
+      this.createLifestealReturn(enemy.x, enemy.y);
     }
 
     if (data.health <= 0) {
@@ -575,7 +713,7 @@ export class GameScene extends Phaser.Scene {
       playtestTelemetry.recordBossDefeated(this.elapsedSeconds);
     }
     this.dropXp(deathX, deathY, data.xp);
-    this.createBurst(deathX, deathY, data.elite ? 0xfff5a8 : 0xffffff);
+    this.createDeathBurst(deathX, deathY, data.type, data.elite);
     enemy.destroy();
     this.audio.play('enemyDeath');
 
@@ -594,7 +732,11 @@ export class GameScene extends Phaser.Scene {
       const pulse = this.add.circle(deathX, deathY, 90, COLORS.boss, 0.28).setDepth(UI_DEPTH.effects);
       pulse.setStrokeStyle(4, 0xffffff, 0.72);
       this.tweens.add({ targets: pulse, scale: 2.1, alpha: 0, duration: 520, ease: 'Sine.Out', onComplete: () => pulse.destroy() });
+      const overload = this.add.circle(deathX, deathY, 48, COLORS.bossDanger, 0.18).setDepth(UI_DEPTH.effects);
+      overload.setStrokeStyle(5, COLORS.bossDanger, 0.5);
+      this.tweens.add({ targets: overload, scale: 4.6, alpha: 0, duration: 760, ease: 'Sine.Out', onComplete: () => overload.destroy() });
       this.createBurst(deathX, deathY, COLORS.boss, 18, 'gold-spark');
+      this.createBurst(deathX, deathY, COLORS.bossDanger, 12, 'danger-spark');
       this.finishRun(true);
     }
   }
@@ -731,6 +873,8 @@ export class GameScene extends Phaser.Scene {
   private selectUpgrade(upgrade: UpgradeDefinition): void {
     const levelBefore = this.upgrades[upgrade.id] ?? 0;
     this.upgrades = applyUpgrade(this.stats, this.upgrades, upgrade);
+    this.player.updateEvolutionVisuals(this.upgrades);
+    this.showPlayerEvolutionPulse(upgrade.id);
     const levelAfter = this.upgrades[upgrade.id] ?? 0;
     this.analytics.track('upgrade_selected', { id: upgrade.id, level: levelAfter });
     playtestTelemetry.recordUpgradeSelected(
@@ -775,6 +919,7 @@ export class GameScene extends Phaser.Scene {
     this.bossSpawned = true;
     this.clearArenaForBossEntrance();
     this.showBossWarning();
+    this.createBossEntranceShockwave();
     this.cameras.main.flash(180, 255, 238, 88, false);
     this.time.delayedCall(940, () => this.createBossEntity(this.time.now));
     this.cameras.main.shake(260, 0.006);
@@ -793,6 +938,7 @@ export class GameScene extends Phaser.Scene {
     this.boss.setAlpha(0.15).setScale(0.82);
     this.tweens.add({ targets: this.boss, alpha: 1, scale: 1, duration: 260, ease: 'Back.Out' });
     this.createSpawnFlash(this.boss.x, this.boss.y, COLORS.boss, 92);
+    this.createBossMaterialization(this.boss.x, this.boss.y);
     this.bossBar.show();
     this.nextBossChargeAt = time + 2500;
     this.nextBossRadialAt = time + 4200;
@@ -832,6 +978,38 @@ export class GameScene extends Phaser.Scene {
         projectile.disableBody(true, true);
       }
     });
+  }
+
+  private createBossEntranceShockwave(): void {
+    const camera = this.cameras.main;
+    const x = camera.scrollX + camera.width / 2;
+    const y = camera.scrollY + camera.height / 2;
+    const ring = this.add.circle(x, y, Math.min(camera.width, camera.height) * 0.2, COLORS.boss, 0.08).setDepth(UI_DEPTH.effects - 2);
+    ring.setStrokeStyle(5, COLORS.boss, 0.42);
+    this.tweens.add({
+      targets: ring,
+      scale: 5.4,
+      alpha: 0,
+      duration: 880,
+      ease: 'Sine.Out',
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  private createBossMaterialization(x: number, y: number): void {
+    for (let index = 0; index < 3; index += 1) {
+      const ring = this.add.circle(x, y, 48 + index * 28, COLORS.boss, 0.06).setDepth(UI_DEPTH.effects);
+      ring.setStrokeStyle(3, index === 1 ? COLORS.bossDanger : COLORS.boss, 0.34 - index * 0.06);
+      this.tweens.add({
+        targets: ring,
+        scale: 1.9 + index * 0.48,
+        alpha: 0,
+        delay: index * 70,
+        duration: 520 + index * 110,
+        ease: 'Sine.Out',
+        onComplete: () => ring.destroy(),
+      });
+    }
   }
 
   private updateBoss(time: number): void {
@@ -895,6 +1073,9 @@ export class GameScene extends Phaser.Scene {
     line.rotation = direction.angle();
     this.bossTelegraph = line;
     this.tweens.add({ targets: line, alpha: 0, duration: 620, onComplete: () => line.destroy() });
+    const core = this.add.circle(this.boss.x, this.boss.y, 46, COLORS.bossDanger, 0.16).setDepth(UI_DEPTH.effects);
+    core.setStrokeStyle(3, COLORS.boss, 0.45);
+    this.tweens.add({ targets: core, scale: 1.55, alpha: 0, duration: 620, ease: 'Sine.Out', onComplete: () => core.destroy() });
   }
 
   private startBossRadial(time: number): void {
@@ -909,6 +1090,8 @@ export class GameScene extends Phaser.Scene {
     const ring = this.add.circle(this.boss.x, this.boss.y, 72, COLORS.boss, 0.12).setStrokeStyle(5, COLORS.boss, 0.7);
     ring.setDepth(UI_DEPTH.effects);
     this.bossRadialRing = ring;
+    const warning = this.add.circle(this.boss.x, this.boss.y, 38, COLORS.bossDanger, 0.1).setStrokeStyle(3, COLORS.bossDanger, 0.42);
+    warning.setDepth(UI_DEPTH.effects);
     this.tweens.add({
       targets: ring,
       scale: 2.2,
@@ -920,6 +1103,18 @@ export class GameScene extends Phaser.Scene {
           this.bossRadialRing = null;
         }
       },
+    });
+    this.tweens.add({
+      targets: warning,
+      scale: 3,
+      alpha: 0,
+      duration: 680,
+      onUpdate: () => {
+        if (this.boss?.active) {
+          warning.setPosition(this.boss.x, this.boss.y);
+        }
+      },
+      onComplete: () => warning.destroy(),
     });
   }
 
@@ -954,6 +1149,44 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private createHitImpact(enemy: Enemy, critical: boolean): void {
+    const data = enemy.dataModel;
+    const major = critical || data.elite || data.type === 'boss';
+    if (!major && Math.random() > 0.38) {
+      return;
+    }
+    const color = critical ? COLORS.critical : this.getEnemyVisualColor(data.type, data.elite);
+    const flash = this.add.circle(enemy.x, enemy.y, major ? 16 : 10, color, major ? 0.2 : 0.12).setDepth(UI_DEPTH.effects);
+    flash.setStrokeStyle(major ? 2 : 1, color, major ? 0.38 : 0.22);
+    this.tweens.add({
+      targets: flash,
+      scale: major ? 1.75 : 1.35,
+      alpha: 0,
+      duration: major ? 180 : 120,
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  private createDeathBurst(x: number, y: number, type: EnemyType, elite: boolean): void {
+    const color = this.getEnemyVisualColor(type, elite);
+    const count = elite ? 12 : type === 'tank' ? 10 : type === 'swarm' ? 5 : 7;
+    const texture = elite ? 'gold-spark' : type === 'runner' || type === 'ranged' ? 'danger-spark' : 'spark';
+    const ring = this.add.circle(x, y, elite ? 32 : 22, color, elite ? 0.14 : 0.08).setDepth(UI_DEPTH.effects);
+    ring.setStrokeStyle(elite ? 3 : 2, color, elite ? 0.42 : 0.28);
+    this.tweens.add({ targets: ring, scale: elite ? 2.2 : 1.7, alpha: 0, duration: elite ? 330 : 240, onComplete: () => ring.destroy() });
+    this.createBurst(x, y, color, count, texture);
+  }
+
+  private getEnemyVisualColor(type: EnemyType, elite: boolean): number {
+    if (elite) {
+      return COLORS.elite;
+    }
+    if (type === 'boss') {
+      return COLORS.boss;
+    }
+    return ENEMY_DEFINITIONS[type].tint;
+  }
+
   private createBurst(x: number, y: number, color: number, count = 7, texture = 'spark'): void {
     for (let i = 0; i < count; i += 1) {
       const spark = this.add.image(x, y, texture).setTint(color).setDepth(UI_DEPTH.effects);
@@ -980,6 +1213,23 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: flash, scale: 1.9, alpha: 0, duration: 220, onComplete: () => flash.destroy() });
   }
 
+  private createLifestealReturn(x: number, y: number): void {
+    if (Math.random() > 0.55) {
+      return;
+    }
+    const spark = this.add.image(x, y, 'danger-spark').setTint(COLORS.playerLifesteal).setDepth(UI_DEPTH.effects).setAlpha(0.42).setScale(0.72);
+    this.tweens.add({
+      targets: spark,
+      x: this.player.x,
+      y: this.player.y,
+      alpha: 0,
+      scale: 0.22,
+      duration: 260,
+      ease: 'Sine.In',
+      onComplete: () => spark.destroy(),
+    });
+  }
+
   private createMovementSpark(): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body | null;
     const speedSq = body ? body.velocity.lengthSq() : 0;
@@ -994,6 +1244,28 @@ export class GameScene extends Phaser.Scene {
     );
     spark.setTint(COLORS.playerProjectileCore).setDepth(UI_DEPTH.effects).setAlpha(0.56).setScale(0.8);
     this.tweens.add({ targets: spark, alpha: 0, scale: 0.15, duration: 260, onComplete: () => spark.destroy() });
+  }
+
+  private showPlayerEvolutionPulse(upgradeId: string): void {
+    const color = upgradeId === 'armor'
+      ? COLORS.playerShield
+      : upgradeId === 'magnet'
+        ? COLORS.playerMagnet
+        : upgradeId === 'lifesteal'
+          ? COLORS.playerLifesteal
+          : upgradeId.includes('critical') || upgradeId.includes('explosion') || upgradeId.includes('chain')
+            ? COLORS.critical
+            : COLORS.playerProjectileCore;
+    const ring = this.add.circle(this.player.x, this.player.y, 38, color, 0.1).setDepth(UI_DEPTH.effects);
+    ring.setStrokeStyle(3, color, 0.46);
+    this.tweens.add({
+      targets: ring,
+      scale: 2.4,
+      alpha: 0,
+      duration: 420,
+      ease: 'Sine.Out',
+      onComplete: () => ring.destroy(),
+    });
   }
 
   private showLevelUpFlash(): void {

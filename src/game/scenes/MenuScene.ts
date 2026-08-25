@@ -15,6 +15,7 @@ interface MenuSceneData {
 export class MenuScene extends Phaser.Scene {
   private save!: GameSaveData;
   private nodes: Phaser.GameObjects.GameObject[] = [];
+  private ambientTweens: Phaser.Tweens.Tween[] = [];
   private isShutdown = true;
 
   constructor() {
@@ -48,6 +49,7 @@ export class MenuScene extends Phaser.Scene {
   private handleShutdown(): void {
     this.isShutdown = true;
     this.scale.off('resize', this.handleResize, this);
+    this.clearAmbientTweens();
     this.nodes.forEach((node) => node.destroy());
     this.nodes = [];
   }
@@ -56,6 +58,7 @@ export class MenuScene extends Phaser.Scene {
     if (!this.save) {
       return;
     }
+    this.clearAmbientTweens();
     this.nodes.forEach((node) => node.destroy());
     this.nodes = [];
     const { width, height } = this.scale;
@@ -382,8 +385,14 @@ export class MenuScene extends Phaser.Scene {
 
   private addMenuBackdrop(width: number, height: number): void {
     this.addNode(this.add.rectangle(width / 2, height / 2, width, height, COLORS.backgroundDeep, 1));
-    this.addNode(this.add.circle(width * 0.23, height * 0.22, Math.min(250, width * 0.24), COLORS.playerGlow, 0.08));
-    this.addNode(this.add.circle(width * 0.82, height * 0.72, Math.min(320, width * 0.28), COLORS.bossShell, 0.1));
+    const playerAura = this.add.circle(width * 0.23, height * 0.22, Math.min(250, width * 0.24), COLORS.playerGlow, 0.08);
+    const bossAura = this.add.circle(width * 0.82, height * 0.72, Math.min(320, width * 0.28), COLORS.bossShell, 0.1);
+    this.addNode(playerAura);
+    this.addNode(bossAura);
+    this.ambientTweens.push(
+      this.tweens.add({ targets: playerAura, scale: 1.06, alpha: 0.12, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.InOut' }),
+      this.tweens.add({ targets: bossAura, scale: 1.04, alpha: 0.15, duration: 2300, yoyo: true, repeat: -1, ease: 'Sine.InOut' }),
+    );
     const grid = this.add.graphics();
     grid.lineStyle(1, COLORS.arenaGrid, 0.13);
     for (let x = 0; x <= width; x += 72) {
@@ -413,6 +422,11 @@ export class MenuScene extends Phaser.Scene {
     grid.fillCircle(width * 0.47, height * 0.58, 7);
     grid.fillCircle(width * 0.58, height * 0.42, 6);
     this.addNode(grid);
+  }
+
+  private clearAmbientTweens(): void {
+    this.ambientTweens.forEach((tween) => tween.stop());
+    this.ambientTweens = [];
   }
 
   private getPermanentUpgradeEffectText(id: PermanentUpgradeId): string {
