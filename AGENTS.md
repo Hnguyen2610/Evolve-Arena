@@ -621,6 +621,7 @@ Do not claim code was committed or pushed unless Git confirms it.
 
 Never force push.
 
+DO NOT AUTO COMMIT OR PUSH.LET IT IN LOCAL FOR REVIEW FIRST AND USER WILL PUSH IT.
 ---
 
 ## Definition of Done

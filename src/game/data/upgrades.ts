@@ -34,12 +34,12 @@ export const UPGRADES: UpgradeDefinition[] = [
   {
     id: 'max-hp',
     name: 'Vital Core',
-    description: '+28 max HP and heal',
+    description: '+24 max HP and heal',
     maxLevel: 5,
     rarity: 'common',
     apply: (stats) => {
-      stats.maxHealth += 28;
-      stats.currentHealth = Math.min(stats.maxHealth, stats.currentHealth + 28);
+      stats.maxHealth += 24;
+      stats.currentHealth = Math.min(stats.maxHealth, stats.currentHealth + 24);
     },
   },
   {
@@ -109,7 +109,7 @@ export const UPGRADES: UpgradeDefinition[] = [
     maxLevel: 4,
     rarity: 'rare',
     apply: (stats) => {
-      stats.lifesteal += 0.018;
+      stats.lifesteal += 0.014;
     },
   },
   {
@@ -140,7 +140,7 @@ export const UPGRADES: UpgradeDefinition[] = [
     maxLevel: 5,
     rarity: 'rare',
     apply: (stats) => {
-      stats.armor += 3;
+      stats.armor += 2;
     },
   },
   {

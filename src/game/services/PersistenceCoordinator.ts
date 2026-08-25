@@ -52,6 +52,18 @@ export async function synchronizePendingBestScore(platform: YouTubePlayablesServ
   return submitted;
 }
 
+export async function reconcilePersistedBestScore(
+  platform: YouTubePlayablesService,
+  save: GameSaveData,
+): Promise<boolean> {
+  const score = Math.max(0, Math.floor(save.bestScore));
+  if (!platform.isPlayablesEnvironment() || !platform.hasSuccessfulLoad() || score <= 0) {
+    return false;
+  }
+
+  return platform.sendScore(score);
+}
+
 export async function saveLatestSnapshotBestEffort(
   storage: GameStorage,
   platform?: YouTubePlayablesService,

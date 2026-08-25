@@ -66,7 +66,7 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     name: 'Apex Core',
     health: 650,
     speed: 72,
-    damage: 10,
+    damage: 12,
     xp: 160,
     score: 1000,
     radius: 54,

@@ -73,6 +73,7 @@ interface PlaytestInspectionApi {
   getCurrentRun(): PlaytestRunTelemetry | null;
   getCompletedRuns(): PlaytestRunTelemetry[];
   getSessionSummary(): PlaytestSessionSummary;
+  getExportJson(): string;
 }
 
 declare global {
@@ -105,6 +106,7 @@ export class PlaytestTelemetryService {
         getCurrentRun: () => this.getCurrentRun(),
         getCompletedRuns: () => this.getCompletedRuns(),
         getSessionSummary: () => this.getSessionSummary(),
+        getExportJson: () => this.getExportJson(),
       };
     }
   }
@@ -264,6 +266,16 @@ export class PlaytestTelemetryService {
 
   getSessionSummary(): PlaytestSessionSummary {
     return { ...this.session };
+  }
+
+  getExportJson(): string {
+    return JSON.stringify({
+      format: 'evolve-arena-playtest-v1',
+      exportedAt: new Date(this.now()).toISOString(),
+      session: this.getSessionSummary(),
+      currentRun: this.getCurrentRun(),
+      completedRuns: this.getCompletedRuns(),
+    });
   }
 
   reset(): void {

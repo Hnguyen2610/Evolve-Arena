@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { createPlayerStats } from '../config/balance';
+import { BOSS_BALANCE, createPlayerStats } from '../config/balance';
 import { GAME_TIMING, UI_DEPTH, WORLD } from '../config/constants';
 import { COLORS, cssColor } from '../config/visual';
 import { ENEMY_DEFINITIONS } from '../data/enemies';
@@ -818,7 +818,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clearArenaForBossEntrance(): void {
-    this.stats.currentHealth = this.stats.maxHealth;
+    this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + BOSS_BALANCE.entryHeal);
     this.enemies.getChildren().forEach((gameObject) => {
       const enemy = gameObject as Enemy;
       if (enemy.active && enemy.dataModel.type !== 'boss') {
@@ -875,7 +875,8 @@ export class GameScene extends Phaser.Scene {
     this.boss.rotation = direction.angle() + Math.PI / 2;
     if (distance < data.radius + 28 && time >= data.contactReadyAt) {
       data.contactReadyAt = time + GAME_TIMING.contactDamageCooldownMs;
-      this.damagePlayer(data.damage);
+      const bossContactDamage = data.chargeUntil > time ? data.damage * BOSS_BALANCE.chargeDamageMultiplier : data.damage;
+      this.damagePlayer(bossContactDamage);
     }
   }
 

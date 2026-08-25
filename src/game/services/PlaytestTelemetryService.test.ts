@@ -114,4 +114,18 @@ describe('PlaytestTelemetryService', () => {
     expect(telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0 })).toBeNull();
     expect(telemetry.getSessionSummary().runsStarted).toBe(0);
   });
+
+  it('exports bounded session telemetry as JSON for manual playtest reports', () => {
+    const telemetry = createService();
+    telemetry.beginRun();
+    telemetry.recordFirstLevelUp(12);
+    telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0 });
+
+    const exported = JSON.parse(telemetry.getExportJson());
+
+    expect(exported.format).toBe('evolve-arena-playtest-v1');
+    expect(exported.session.runsCompleted).toBe(1);
+    expect(exported.completedRuns[0].firstLevelUpSeconds).toBe(12);
+    expect(exported.currentRun).toBeNull();
+  });
 });

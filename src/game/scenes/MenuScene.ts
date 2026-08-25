@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
+import { isPlaytestModeEnabled } from '../config/playtest';
 import { COLORS } from '../config/visual';
 import { buyPermanentUpgrade, getPermanentUpgradeCost } from '../systems/ProgressionSystem';
-import { gameStorage, platform } from '../services/PlatformServices';
+import { gameStorage, platform, playtestTelemetry } from '../services/PlatformServices';
 import { saveSnapshotAndSyncBestScore, setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
 import { loadSaveOrDefault } from '../services/StorageService';
 import type { GameSaveData, PermanentUpgradeId } from '../types';
@@ -129,6 +130,7 @@ export class MenuScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
+    this.addPlaytestExportButton(width, height, shortLandscape);
   }
 
   private renderShortLandscape(width: number, height: number): void {
@@ -193,6 +195,64 @@ export class MenuScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
+    this.addPlaytestExportButton(width, height, true);
+  }
+
+  private addPlaytestExportButton(width: number, height: number, shortLandscape: boolean): void {
+    if (!isPlaytestModeEnabled()) {
+      return;
+    }
+
+    const buttonWidth = shortLandscape ? 148 : 172;
+    const buttonHeight = 30;
+    const x = width - buttonWidth / 2 - 16;
+    const y = shortLandscape ? height - 24 : 28;
+    const shadow = this.add.rectangle(3, 4, buttonWidth, buttonHeight, 0x000000, 0.22);
+    const bg = this.add.rectangle(0, 0, buttonWidth, buttonHeight, COLORS.uiPanelLight, 0.94).setStrokeStyle(1, COLORS.uiPrimary, 0.55);
+    const label = this.add
+      .text(0, 0, 'COPY PLAYTEST DATA', {
+        color: '#d7edff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '10px' : '11px',
+        fontStyle: '900',
+      })
+      .setOrigin(0.5);
+    const button = this.add.container(x, y, [shadow, bg, label]);
+    bg.setInteractive({ useHandCursor: true });
+    bg.on('pointerup', () => {
+      void this.copyPlaytestData();
+    });
+    this.addNode(button);
+  }
+
+  private async copyPlaytestData(): Promise<void> {
+    const json = playtestTelemetry.getExportJson();
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(json);
+        this.showPlaytestCopyMessage('PLAYTEST DATA COPIED');
+        return;
+      } catch {
+        // Fall through to a selectable browser prompt for non-secure contexts.
+      }
+    }
+
+    window.prompt('Copy playtest data', json);
+  }
+
+  private showPlaytestCopyMessage(message: string): void {
+    const notice = this.add
+      .text(this.scale.width / 2, Math.min(this.scale.height - 64, 74), message, {
+        color: '#9ff7db',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: '13px',
+        fontStyle: '900',
+        stroke: '#07131a',
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5);
+    this.addNode(notice);
+    this.tweens.add({ targets: notice, alpha: 0, delay: 900, duration: 260, onComplete: () => notice.destroy() });
   }
 
   private createUpgradePanel(

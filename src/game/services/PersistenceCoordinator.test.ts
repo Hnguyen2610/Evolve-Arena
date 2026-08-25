@@ -5,6 +5,7 @@ import {
   clearPendingBestScore,
   getPendingBestScore,
   markPendingBestScore,
+  reconcilePersistedBestScore,
   saveLatestSnapshotBestEffort,
   saveSnapshotAndSyncBestScore,
   setLatestSaveSnapshot,
@@ -119,5 +120,25 @@ describe('PersistenceCoordinator pending best score synchronization', () => {
 
     expect(markPendingBestScore(2000, platform)).toBe(false);
     expect(getPendingBestScore()).toBeNull();
+  });
+
+  it('best-effort reconciles a persisted best score after a successful Playables load', async () => {
+    const platform = createPlatform();
+
+    const submitted = await reconcilePersistedBestScore(platform, { ...cloneDefaultSave(), bestScore: 3200 });
+
+    expect(submitted).toBe(true);
+    expect(platform.sendScore).toHaveBeenCalledWith(3200);
+  });
+
+  it('skips startup score reconciliation outside Playables or before successful load', async () => {
+    const localPlatform = createPlatform({ inPlayables: false });
+    const unloadedPlatform = { ...createPlatform(), hasSuccessfulLoad: vi.fn(() => false) };
+
+    await expect(reconcilePersistedBestScore(localPlatform, { ...cloneDefaultSave(), bestScore: 3200 })).resolves.toBe(false);
+    await expect(reconcilePersistedBestScore(unloadedPlatform, { ...cloneDefaultSave(), bestScore: 3200 })).resolves.toBe(false);
+
+    expect(localPlatform.sendScore).not.toHaveBeenCalled();
+    expect(unloadedPlatform.sendScore).not.toHaveBeenCalled();
   });
 });

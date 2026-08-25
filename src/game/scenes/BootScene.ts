@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { UI_DEPTH } from '../config/constants';
 import { COLORS, ENEMY_COLORS } from '../config/visual';
 import { gameStorage, platform } from '../services/PlatformServices';
-import { setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
+import { reconcilePersistedBestScore, setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
 import { loadSaveOrDefault } from '../services/StorageService';
 import { loadStartupSaveAfterFirstFrame } from '../systems/StartupSystem';
 
@@ -45,6 +45,7 @@ export class BootScene extends Phaser.Scene {
       loadSave: () => loadSaveOrDefault(gameStorage),
     });
     setLatestSaveSnapshot(save);
+    void reconcilePersistedBestScore(platform, save);
     this.scene.start('MenuScene', { save });
   }
 
