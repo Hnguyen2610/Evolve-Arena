@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
+import { getChapterDefinition } from '../data/chapters';
 import { getStageDefinition } from '../data/stages';
 import { gameStorage, platform } from '../services/PlatformServices';
 import { markPendingBestScore, setLatestSaveSnapshot, synchronizePendingBestScore } from '../services/PersistenceCoordinator';
@@ -41,7 +42,6 @@ export class ResultScene extends Phaser.Scene {
     this.save = persistence.save;
     setLatestSaveSnapshot(this.save);
     const stage = getStageDefinition(this.result.stageId);
-
     const { width, height } = this.scale;
     const centerX = width / 2;
     const shortLandscape = width > height && height < 520;
@@ -104,13 +104,22 @@ export class ResultScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(3);
+    const rewardText = [
+      `Best ${this.save.bestScore}`,
+      `Coins +${this.result.coinsEarned}`,
+      persistence.stageRewardCoins > 0 ? `First clear +${persistence.stageRewardCoins}` : null,
+      persistence.chapterRewardCoins > 0 ? `Chapter +${persistence.chapterRewardCoins}` : null,
+      `Total ${this.save.coins}`,
+    ].filter((item): item is string => item !== null).join('   ');
+
     this.add
-      .text(centerX, scoreY + (shortLandscape ? 34 : 46), `Best ${this.save.bestScore}   Coins +${this.result.coinsEarned}   Total ${this.save.coins}`, {
+      .text(centerX, scoreY + (shortLandscape ? 34 : 46), rewardText, {
         color: '#dfe9ff',
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: shortLandscape ? '14px' : '16px',
         fontStyle: '800',
         align: 'center',
+        wordWrap: { width: panelWidth - 42 },
       })
       .setOrigin(0.5)
       .setDepth(3);
@@ -133,6 +142,20 @@ export class ResultScene extends Phaser.Scene {
       this.add
         .text(centerX, scoreY + (shortLandscape ? 86 : 106), `${unlocked.name.toUpperCase()} UNLOCKED`, {
           color: '#9ff7db',
+          fontFamily: 'Arial, Helvetica, sans-serif',
+          fontSize: shortLandscape ? '12px' : '14px',
+          fontStyle: '900',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setDepth(3);
+    }
+
+    if (persistence.completedChapterId) {
+      const completedChapter = getChapterDefinition(persistence.completedChapterId);
+      this.add
+        .text(centerX, scoreY + (shortLandscape ? 106 : 128), `${completedChapter.name.toUpperCase()} COMPLETE`, {
+          color: '#fff5a8',
           fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '12px' : '14px',
           fontStyle: '900',

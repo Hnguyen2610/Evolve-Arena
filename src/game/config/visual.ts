@@ -53,6 +53,9 @@ export const ENEMY_COLORS = {
   swarm: { fill: 0xff75ca, core: 0xffd4ef, stroke: 0x4a1939 },
   orbiter: { fill: 0x8f6dff, core: 0xf3e8ff, stroke: 0x24134f },
   'pulse-caster': { fill: 0xff4fd8, core: 0xffd7f6, stroke: 0x4a123f },
+  guardian: { fill: 0x27586b, core: 0xd4fbff, stroke: 0x102d3a },
+  disruptor: { fill: 0xffa53d, core: 0xfff1b8, stroke: 0x4a2607 },
+  'energy-node': { fill: 0xffd166, core: 0xffffff, stroke: 0x53330d },
 };
 
 export const RARITY_COLORS: Record<UpgradeRarity, {

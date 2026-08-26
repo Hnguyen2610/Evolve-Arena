@@ -14,4 +14,11 @@ describe('DifficultySystem', () => {
     expect(getDifficulty(65, 1, 'stage-2').enemyTypes).toContain('pulse-caster');
     expect(getDifficulty(65, 1).enemyTypes).not.toContain('pulse-caster');
   });
+
+  it('introduces stage 3 guardian and disruptor pressure without changing earlier stages', () => {
+    expect(getDifficulty(28, 1, 'stage-3').enemyTypes).toContain('guardian');
+    expect(getDifficulty(58, 1, 'stage-3').enemyTypes).toContain('disruptor');
+    expect(getDifficulty(58, 1, 'stage-1').enemyTypes).not.toContain('guardian');
+    expect(getDifficulty(58, 1, 'stage-2').enemyTypes).not.toContain('disruptor');
+  });
 });

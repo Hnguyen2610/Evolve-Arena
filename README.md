@@ -4,7 +4,7 @@ Evolve Arena is a Phaser 3 hybrid-casual survival action game: move, auto-attack
 
 ## Gameplay Loop
 
-Move through the arena, survive enemy waves, collect XP orbs, level up, choose one of three upgrades, fight elites, defeat the stage boss, and spend earned coins on permanent upgrades.
+Move through Chapter 1 arenas, survive enemy waves, collect XP orbs, level up, choose one of three upgrades, fight elites, defeat the stage boss, earn first-clear rewards, and spend coins on permanent upgrades.
 
 ## Stack
 
@@ -50,26 +50,27 @@ npm run audit:playables
 
 ## Implemented MVP Features
 
-- Stage Select with Stage 1 available by default and Stage 2 unlocked by clearing Stage 1
+- Stage Select with Chapter 1 progression across three stages
 - Stage 1: Neon Core arena with the original Apex Core boss encounter
 - Stage 2: Rift Nexus arena with rift hazards, Orbiter enemies, Pulse Casters, and the Prism Warden boss
+- Stage 3: Core Forge arena with Energy Nodes, Guardians, Disruptors, and the Forge Tyrant chapter boss
 - One playable character
-- Seven standard enemy types: Basic, Runner, Tank, Ranged, Swarm, Orbiter, Pulse Caster
+- Nine standard enemy types: Basic, Runner, Tank, Ranged, Swarm, Orbiter, Pulse Caster, Guardian, Disruptor
 - Elite enemy variants
-- Stage-aware boss encounters with charge, radial projectile, and rift pressure patterns
+- Stage-aware boss encounters with charge, radial projectile, rift pressure, and controlled support-node patterns
 - Auto-targeting projectile combat
 - Player health, armor mitigation, enemy contact damage, and enemy projectiles
 - XP drops, XP magnet attraction, level progression, and upgrade selection
 - 16 temporary upgrades including damage, attack speed, movement, health, magnet, extra shots, piercing, crits, explosions, lifesteal, armor, and knockback
 - Score, kills, elite kills, survival bonus, boss reward, coins, and best score
-- Permanent meta upgrades for damage, health, and movement speed
+- One-time stage first-clear rewards, Chapter 1 completion reward, and permanent meta upgrades for damage, health, and movement speed
 - Game over, victory, replay, and upgrade menu
 - Procedural Phaser textures, hit flashes, bursts, floating damage, camera shake, and boss telegraphs
 
 ## Architecture Overview
 
 - `src/game/config`: central balance, constants, Phaser config
-- `src/game/data`: stage, enemy, upgrade, and save defaults
+- `src/game/data`: chapter, stage, enemy, upgrade, and save defaults
 - `src/game/entities`: Phaser entity wrappers
 - `src/game/input`: desktop and touch input
 - `src/game/scenes`: boot, menu, gameplay, results
@@ -87,6 +88,7 @@ Persisted data:
 - Coins
 - Permanent upgrade levels
 - Unlocked and cleared stage IDs
+- Cleared chapter IDs
 
 ## YouTube Playables Readiness
 

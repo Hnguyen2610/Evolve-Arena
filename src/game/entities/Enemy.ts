@@ -44,8 +44,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       .ellipse(x, y + definition.radius * 0.58, definition.radius * (elite ? 2.25 : 1.85), definition.radius * 0.72, definition.tint, bossType ? 0.18 : 0.12)
       .setDepth(6);
     if (bossType) {
-      this.glow = scene.add.image(x, y, definition.type === 'rift-boss' ? 'rift-boss-glow' : 'boss-glow').setDepth(7).setAlpha(0.42);
-      this.bossRing = scene.add.image(x, y, definition.type === 'rift-boss' ? 'rift-boss-ring' : 'boss-ring').setDepth(8).setAlpha(0.9);
+      this.glow = scene.add.image(x, y, this.getBossCompanionTexture('glow')).setDepth(7).setAlpha(0.42);
+      this.bossRing = scene.add.image(x, y, this.getBossCompanionTexture('ring')).setDepth(8).setAlpha(0.9);
       this.fxGlow = addGlowFx(scene, this, definition.tint, 1.4, 0.18);
       this.fxShadow = addShadowFx(scene, this, definition.tint, 0.24);
     } else if (elite) {
@@ -131,9 +131,26 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.setScale(this.baseDisplayScale * (1 + chargePulse));
     } else if (data.behavior === 'swarm') {
       this.setScale(this.baseDisplayScale * (1 + Math.sin(time / 80 + this.x) * 0.045));
+    } else if (data.behavior === 'guardian') {
+      this.setScale(this.baseDisplayScale * (1.01 + Math.sin(time / 240) * 0.02), this.baseDisplayScale * (0.99 - Math.sin(time / 240) * 0.014));
+    } else if (data.behavior === 'disruptor') {
+      const charging = data.nextAttackAt > time && data.nextAttackAt - time < 520;
+      this.setScale(this.baseDisplayScale * (1 + (charging ? Math.sin(time / 58) * 0.062 : Math.sin(phase * 1.9) * 0.02)));
+    } else if (data.behavior === 'node') {
+      this.setScale(this.baseDisplayScale * (1 + Math.sin(time / 180) * 0.035));
     } else {
       this.setScale(this.baseDisplayScale * (1 + Math.sin(phase * 2.4) * 0.024));
     }
+  }
+
+  private getBossCompanionTexture(kind: 'glow' | 'ring'): string {
+    if (this.dataModel.type === 'rift-boss') {
+      return `rift-boss-${kind}`;
+    }
+    if (this.dataModel.type === 'forge-boss') {
+      return `forge-boss-${kind}`;
+    }
+    return `boss-${kind}`;
   }
 
   private isBossType(): boolean {

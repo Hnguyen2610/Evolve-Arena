@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { cloneDefaultSave } from '../services/StorageService';
-import type { RunResult } from '../types';
+import type { RunResult, StageId } from '../types';
 import { persistResultAndMaybeSendScore } from './ResultPersistenceSystem';
 
 const baseResult: RunResult = {
   stageId: 'stage-1',
+  chapterId: 'chapter-1',
   victory: false,
   score: 1000,
   kills: 20,
@@ -81,8 +82,11 @@ describe('persistResultAndMaybeSendScore', () => {
     });
 
     expect(outcome.newlyUnlockedStageId).toBe('stage-2');
+    expect(outcome.firstClearedStageId).toBe('stage-1');
+    expect(outcome.stageRewardCoins).toBe(35);
     expect(outcome.save.clearedStageIds).toEqual(['stage-1']);
     expect(outcome.save.unlockedStageIds).toEqual(['stage-1', 'stage-2']);
+    expect(outcome.save.coins).toBe(baseResult.coinsEarned + 35);
   });
 
   it('does not unlock another stage after a defeat', async () => {
@@ -95,5 +99,53 @@ describe('persistResultAndMaybeSendScore', () => {
     expect(outcome.newlyUnlockedStageId).toBeNull();
     expect(outcome.save.clearedStageIds).toEqual([]);
     expect(outcome.save.unlockedStageIds).toEqual(['stage-1']);
+    expect(outcome.stageRewardCoins).toBe(0);
+  });
+
+  it('unlocks stage 3 and grants the stage 2 first-clear reward once', async () => {
+    const save = { ...cloneDefaultSave(), unlockedStageIds: ['stage-1', 'stage-2'] satisfies StageId[] };
+    const result = { ...baseResult, stageId: 'stage-2' as const, victory: true, bossDefeated: true };
+    const outcome = await persistResultAndMaybeSendScore(save, result, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+    const replay = await persistResultAndMaybeSendScore(outcome.save, result, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+
+    expect(outcome.newlyUnlockedStageId).toBe('stage-3');
+    expect(outcome.stageRewardCoins).toBe(55);
+    expect(replay.stageRewardCoins).toBe(0);
+    expect(replay.newlyUnlockedStageId).toBeNull();
+  });
+
+  it('grants the chapter completion reward once after a stage 3 victory', async () => {
+    const save = {
+      ...cloneDefaultSave(),
+      coins: 10,
+      unlockedStageIds: ['stage-1', 'stage-2', 'stage-3'] satisfies StageId[],
+      clearedStageIds: ['stage-1', 'stage-2'] satisfies StageId[],
+    };
+    const result = { ...baseResult, stageId: 'stage-3' as const, victory: true, bossDefeated: true, coinsEarned: 20 };
+    const outcome = await persistResultAndMaybeSendScore(save, result, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+    const replay = await persistResultAndMaybeSendScore(outcome.save, result, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+
+    expect(outcome.completedChapterId).toBe('chapter-1');
+    expect(outcome.stageRewardCoins).toBe(80);
+    expect(outcome.chapterRewardCoins).toBe(120);
+    expect(outcome.save.coins).toBe(230);
+    expect(replay.completedChapterId).toBeNull();
+    expect(replay.chapterRewardCoins).toBe(0);
   });
 });

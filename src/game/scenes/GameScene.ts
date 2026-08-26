@@ -53,6 +53,10 @@ interface StageHazardInstance {
   damageApplied: boolean;
 }
 
+const ENERGY_NODE_TYPE: EnemyType = 'energy-node';
+const GUARDIAN_LINK_RANGE = 175;
+const GUARDIAN_PROTECTION_MULTIPLIER = 0.68;
+
 export class GameScene extends Phaser.Scene {
   private save: GameSaveData = cloneDefaultSave();
   private mode: GameMode = 'playing';
@@ -101,6 +105,9 @@ export class GameScene extends Phaser.Scene {
   private nextAmbientSparkAt = 0;
   private nextStageHazardAt = 0;
   private stageHazards: StageHazardInstance[] = [];
+  private nextEnergyNodeAt = 0;
+  private nextBossSupportNodeAt = 0;
+  private nextTelemetryProgressAt = 0;
 
   constructor() {
     super('GameScene');
@@ -117,7 +124,7 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.resetRunState();
     setLatestSaveSnapshot(this.save);
-    playtestTelemetry.beginRun(this.replayStart ? 'replay' : 'new', this.stage.id);
+    playtestTelemetry.beginRun(this.replayStart ? 'replay' : 'new', this.stage.id, this.stage.chapterId);
     this.physics.world.resume();
     this.stats = createPlayerStats(this.save.permanentUpgrades);
     this.createWorld();
@@ -133,7 +140,7 @@ export class GameScene extends Phaser.Scene {
     this.registerLifecycle();
     this.registerAudioUnlock();
     this.hud.showHint(`${this.stage.name}: move to survive.`);
-    this.analytics.track(this.replayStart ? 'replay_started' : 'game_started', { stageId: this.stage.id });
+    this.analytics.track(this.replayStart ? 'replay_started' : 'game_started', { stageId: this.stage.id, chapterId: this.stage.chapterId });
   }
 
   private resetRunState(): void {
@@ -164,6 +171,9 @@ export class GameScene extends Phaser.Scene {
     this.arenaVisualPhase = -1;
     this.nextAmbientSparkAt = 0;
     this.nextStageHazardAt = 0;
+    this.nextEnergyNodeAt = 0;
+    this.nextBossSupportNodeAt = 0;
+    this.nextTelemetryProgressAt = 0;
     this.stageHazards.forEach((hazard) => {
       hazard.zone.destroy();
       hazard.core.destroy();
@@ -182,11 +192,14 @@ export class GameScene extends Phaser.Scene {
     this.updatePlayer();
     this.updateSpawning(time);
     this.updateEnemies(time, deltaSeconds);
+    this.updateEnergyNodes(time);
+    this.drawGuardianLinks();
     this.updateStageHazards(time);
     this.updateProjectiles(time);
     this.updateXpOrbs(deltaSeconds);
     this.tryAutoAttack(time);
     this.updateBoss(time);
+    this.updateTelemetryProgress(time);
     this.updateHud();
 
     if (!this.bossSpawned && this.elapsedSeconds >= this.stage.bossSpawnSeconds) {
@@ -478,6 +491,26 @@ export class GameScene extends Phaser.Scene {
     this.createSpawnFlash(enemy.x, enemy.y, elite ? COLORS.elite : definition.tint, elite ? 52 : 34);
   }
 
+  private spawnEnergyNode(preferredPoint?: Phaser.Math.Vector2): Enemy | null {
+    if (!this.stage.energyNode.enabled || this.countActiveEnergyNodes() >= this.getEnergyNodeCap()) {
+      return null;
+    }
+
+    const definition = ENEMY_DEFINITIONS[ENERGY_NODE_TYPE];
+    const spawn = preferredPoint ?? this.pickEnergyNodePoint();
+    const scale = 1 + this.elapsedSeconds / 210;
+    const node = new Enemy(this, spawn.x, spawn.y, definition, false, scale);
+    this.enemies.add(node);
+    node.setVelocity(0, 0);
+    node.setAlpha(0.2);
+    node.dataModel.nextAttackAt = this.time.now + this.stage.energyNode.telegraphMs + 900;
+    this.tweens.add({ targets: node, alpha: 1, scale: 1.08, duration: 240, yoyo: true, ease: 'Sine.Out' });
+    this.createSpawnFlash(node.x, node.y, this.stage.visualTheme.hazard, 54);
+    this.createEnergyNodeArrival(node.x, node.y);
+    playtestTelemetry.recordEnergyNodeSpawned(this.elapsedSeconds);
+    return node;
+  }
+
   private pickSpawnPoint(): Phaser.Math.Vector2 {
     const camera = this.cameras.main;
     const margin = 90;
@@ -524,11 +557,17 @@ export class GameScene extends Phaser.Scene {
       if (data.behavior === 'boss') {
         return;
       }
+      if (data.behavior === 'node') {
+        enemy.setVelocity(0, 0);
+        enemy.rotation += deltaSeconds * 1.35;
+        enemy.setData('lifeSeconds', (Number(enemy.getData('lifeSeconds')) || 0) + deltaSeconds);
+        return;
+      }
 
       const toPlayer = new Phaser.Math.Vector2(this.player.x - enemy.x, this.player.y - enemy.y);
       const distance = Math.max(1, toPlayer.length());
       const direction = toPlayer.clone().scale(1 / distance);
-      const desiredVelocity = this.getEnemyVelocity(data, direction, distance, time);
+      const desiredVelocity = this.getEnemyVelocity(enemy, data, direction, distance, time);
       enemy.setVelocity(desiredVelocity.x, desiredVelocity.y);
       enemy.rotation = direction.angle() + Math.PI / 2;
 
@@ -540,6 +579,9 @@ export class GameScene extends Phaser.Scene {
           data.nextAttackAt = time + GAME_TIMING.rangedCooldownMs;
           this.fireEnemyProjectile(enemy.x, enemy.y, direction.angle(), 330, data.damage);
         }
+      } else if (data.behavior === 'disruptor' && time >= data.nextAttackAt && distance < 560) {
+        data.nextAttackAt = time + GAME_TIMING.rangedCooldownMs + 820;
+        this.fireDisruptor(enemy, direction.angle(), data.damage);
       }
 
       if (distance < data.radius + 24 && time >= data.contactReadyAt) {
@@ -562,6 +604,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getEnemyVelocity(
+    enemy: Enemy,
     data: EnemyRuntimeData,
     direction: Phaser.Math.Vector2,
     distance: number,
@@ -580,6 +623,22 @@ export class GameScene extends Phaser.Scene {
         return direction.clone().scale(data.speed * 0.72);
       }
       return new Phaser.Math.Vector2(Math.sin(time / 420) * 45, Math.cos(time / 520) * 45);
+    }
+    if (data.behavior === 'guardian') {
+      const node = this.findNearestEnergyNode(enemy);
+      if (node && Phaser.Math.Distance.Squared(enemy.x, enemy.y, node.x, node.y) > 92 * 92) {
+        return new Phaser.Math.Vector2(node.x - enemy.x, node.y - enemy.y).normalize().scale(data.speed);
+      }
+      return direction.clone().scale(data.speed * 0.76);
+    }
+    if (data.behavior === 'disruptor') {
+      if (distance < 230) {
+        return direction.clone().scale(-data.speed * 0.9);
+      }
+      if (distance > 430) {
+        return direction.clone().scale(data.speed * 0.72);
+      }
+      return new Phaser.Math.Vector2(Math.sin(time / 360) * 55, Math.cos(time / 420) * 55);
     }
 
     const speed = data.behavior === 'runner' ? data.speed * 1.22 : data.speed;
@@ -605,6 +664,166 @@ export class GameScene extends Phaser.Scene {
         this.fireEnemyProjectile(enemy.x, enemy.y, angle + offset, 300, damage * 0.78);
       });
     });
+  }
+
+  private fireDisruptor(enemy: Enemy, angle: number, damage: number): void {
+    const color = this.stage.visualTheme.hazard;
+    const telegraph = this.add.rectangle(enemy.x, enemy.y, 420, 22, color, 0.16).setDepth(UI_DEPTH.effects);
+    telegraph.setStrokeStyle(2, color, 0.45);
+    telegraph.rotation = angle;
+    const core = this.add.circle(enemy.x, enemy.y, 20, color, 0.16).setStrokeStyle(2, color, 0.5).setDepth(UI_DEPTH.effects);
+    this.tweens.add({ targets: telegraph, alpha: 0, duration: 420, onComplete: () => telegraph.destroy() });
+    this.tweens.add({ targets: core, scale: 1.9, alpha: 0, duration: 420, onComplete: () => core.destroy() });
+    this.time.delayedCall(320, () => {
+      if (!enemy.active || this.mode !== 'playing') {
+        return;
+      }
+      [-0.12, 0.12].forEach((offset) => {
+        this.fireEnemyProjectile(enemy.x, enemy.y, angle + offset, 355, damage * 0.82);
+      });
+    });
+  }
+
+  private updateEnergyNodes(time: number): void {
+    const config = this.stage.energyNode;
+    if (!config.enabled || this.bossDefeated) {
+      return;
+    }
+
+    if (!this.bossSpawned && this.elapsedSeconds >= config.startSeconds) {
+      if (this.nextEnergyNodeAt === 0) {
+        this.nextEnergyNodeAt = time + 700;
+      }
+      if (time >= this.nextEnergyNodeAt) {
+        const interval = this.elapsedSeconds >= config.lateStartSeconds ? config.lateIntervalMs : config.baseIntervalMs;
+        this.nextEnergyNodeAt = time + interval;
+        this.spawnEnergyNode();
+      }
+    }
+
+    this.getActiveEnergyNodes().forEach((node) => {
+      if (time >= node.dataModel.nextAttackAt) {
+        node.dataModel.nextAttackAt = time + 3900;
+        this.startEnergyNodePulse(node, time);
+      }
+    });
+  }
+
+  private startEnergyNodePulse(node: Enemy, time: number): void {
+    const config = this.stage.energyNode;
+    const color = this.stage.visualTheme.hazard;
+    const ring = this.add.circle(node.x, node.y, 48, color, 0.08).setStrokeStyle(4, color, 0.62).setDepth(UI_DEPTH.effects);
+    const glow = this.add.image(node.x, node.y, 'energy-node-glow').setTint(color).setAlpha(0.32).setDepth(UI_DEPTH.effects - 1);
+    this.tweens.add({
+      targets: [ring, glow],
+      scale: 2.25,
+      alpha: 0,
+      duration: config.telegraphMs,
+      ease: 'Sine.Out',
+      onComplete: () => {
+        ring.destroy();
+        glow.destroy();
+      },
+    });
+    this.time.delayedCall(config.telegraphMs, () => {
+      if (!node.active || this.mode !== 'playing') {
+        return;
+      }
+      const offset = time / 700;
+      for (let i = 0; i < config.pulseProjectileCount; i += 1) {
+        const angle = offset + (Math.PI * 2 * i) / config.pulseProjectileCount;
+        this.fireEnemyProjectile(node.x, node.y, angle, config.projectileSpeed, config.projectileDamage, 'energy-node');
+      }
+      this.createBurst(node.x, node.y, color, 6, 'gold-spark');
+    });
+  }
+
+  private getEnergyNodeCap(): number {
+    const config = this.stage.energyNode;
+    if (!config.enabled || this.bossDefeated) {
+      return 0;
+    }
+    if (this.bossSpawned) {
+      return 1;
+    }
+    return this.elapsedSeconds >= config.lateStartSeconds ? config.maxActiveLate : config.maxActiveEarly;
+  }
+
+  private getActiveEnergyNodes(): Enemy[] {
+    return this.enemies.getChildren().filter((gameObject): gameObject is Enemy => {
+      return gameObject instanceof Enemy && gameObject.active && gameObject.dataModel.type === ENERGY_NODE_TYPE;
+    });
+  }
+
+  private countActiveEnergyNodes(): number {
+    return this.getActiveEnergyNodes().length;
+  }
+
+  private findNearestEnergyNode(origin: { x: number; y: number }): Enemy | null {
+    let closest: Enemy | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    this.getActiveEnergyNodes().forEach((node) => {
+      const distance = Phaser.Math.Distance.Squared(origin.x, origin.y, node.x, node.y);
+      if (distance < closestDistance) {
+        closest = node;
+        closestDistance = distance;
+      }
+    });
+    return closest;
+  }
+
+  private isEnergyNodeProtected(node: Enemy): boolean {
+    return this.enemies.getChildren().some((gameObject) => {
+      const guardian = gameObject as Enemy;
+      return guardian.active
+        && guardian.dataModel.type === 'guardian'
+        && Phaser.Math.Distance.Squared(guardian.x, guardian.y, node.x, node.y) <= GUARDIAN_LINK_RANGE * GUARDIAN_LINK_RANGE;
+    });
+  }
+
+  private drawGuardianLinks(): void {
+    const nodes = this.getActiveEnergyNodes();
+    if (nodes.length === 0) {
+      return;
+    }
+
+    this.enemies.getChildren().forEach((gameObject) => {
+      const guardian = gameObject as Enemy;
+      if (!guardian.active || guardian.dataModel.type !== 'guardian') {
+        return;
+      }
+      const node = this.findNearestEnergyNode(guardian);
+      if (!node || Phaser.Math.Distance.Squared(guardian.x, guardian.y, node.x, node.y) > GUARDIAN_LINK_RANGE * GUARDIAN_LINK_RANGE) {
+        return;
+      }
+      this.foregroundFx.lineStyle(3, this.stage.visualTheme.phase3, 0.32);
+      this.foregroundFx.lineBetween(guardian.x, guardian.y, node.x, node.y);
+      this.foregroundFx.fillStyle(this.stage.visualTheme.phase3, 0.16);
+      this.foregroundFx.fillCircle(node.x, node.y, 34 + Math.sin(this.time.now / 160) * 3);
+    });
+  }
+
+  private pickEnergyNodePoint(): Phaser.Math.Vector2 {
+    const camera = this.cameras.main;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const distance = Phaser.Math.Between(260, 620);
+      const x = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * distance, camera.scrollX + 110, camera.scrollX + camera.width - 110);
+      const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, camera.scrollY + 110, camera.scrollY + camera.height - 110);
+      if (Phaser.Math.Distance.Squared(x, y, this.player.x, this.player.y) >= 210 * 210) {
+        return new Phaser.Math.Vector2(Phaser.Math.Clamp(x, 90, WORLD.width - 90), Phaser.Math.Clamp(y, 90, WORLD.height - 90));
+      }
+    }
+    return new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(this.player.x + 300, 90, WORLD.width - 90),
+      Phaser.Math.Clamp(this.player.y - 120, 90, WORLD.height - 90),
+    );
+  }
+
+  private createEnergyNodeArrival(x: number, y: number): void {
+    const color = this.stage.visualTheme.hazard;
+    const glow = this.add.image(x, y, 'energy-node-glow').setTint(color).setAlpha(0.24).setDepth(UI_DEPTH.effects - 1);
+    this.tweens.add({ targets: glow, scale: 1.8, alpha: 0, duration: 420, ease: 'Sine.Out', onComplete: () => glow.destroy() });
   }
 
   private tryAutoAttack(time: number): void {
@@ -670,10 +889,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private fireEnemyProjectile(x: number, y: number, angle: number, speed: number, damage: number): void {
+  private fireEnemyProjectile(
+    x: number,
+    y: number,
+    angle: number,
+    speed: number,
+    damage: number,
+    source: 'enemy' | 'boss' | 'energy-node' = 'enemy',
+  ): void {
     const projectile = this.getProjectile(this.enemyProjectiles, 'enemy');
     projectile.fire(x, y, angle, speed, {
       owner: 'enemy',
+      source,
       damage,
       pierceLeft: 0,
       expiresAt: this.time.now + 2800,
@@ -729,6 +956,9 @@ export class GameScene extends Phaser.Scene {
     if (!projectile.active) {
       return;
     }
+    if (projectile.projectileData.source === 'energy-node') {
+      playtestTelemetry.recordEnergyNodePressureHit(this.elapsedSeconds);
+    }
     this.damagePlayer(projectile.projectileData.damage);
     projectile.disableBody(true, true);
   }
@@ -742,8 +972,13 @@ export class GameScene extends Phaser.Scene {
     critical = false,
   ): void {
     const data = enemy.dataModel;
-    data.health -= amount;
-    this.showDamage(enemy.x, enemy.y, Math.floor(amount), critical ? cssColor(COLORS.critical) : data.elite ? '#fff5a8' : '#ffffff', critical);
+    const protectedByGuardian = data.type === ENERGY_NODE_TYPE && this.isEnergyNodeProtected(enemy);
+    const finalAmount = protectedByGuardian ? amount * GUARDIAN_PROTECTION_MULTIPLIER : amount;
+    data.health -= finalAmount;
+    this.showDamage(enemy.x, enemy.y, Math.floor(finalAmount), critical ? cssColor(COLORS.critical) : data.elite ? '#fff5a8' : '#ffffff', critical);
+    if (protectedByGuardian) {
+      this.createGuardianShieldPulse(enemy.x, enemy.y);
+    }
     this.createHitImpact(enemy, critical);
     this.tweens.add({ targets: enemy, alpha: 0.45, duration: 55, yoyo: true });
     const push = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y).normalize().scale(knockback);
@@ -756,7 +991,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.stats.lifesteal > 0) {
-      this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + amount * this.stats.lifesteal);
+      this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + finalAmount * this.stats.lifesteal);
       this.createLifestealReturn(enemy.x, enemy.y);
     }
 
@@ -775,6 +1010,9 @@ export class GameScene extends Phaser.Scene {
       this.eliteKills += 1;
       this.analytics.track('elite_killed', { time: this.elapsedSeconds });
       playtestTelemetry.recordEliteKilled(this.elapsedSeconds);
+    }
+    if (data.type === ENERGY_NODE_TYPE) {
+      playtestTelemetry.recordEnergyNodeDestroyed(this.elapsedSeconds);
     }
     if (data.behavior === 'boss') {
       this.bossDefeated = true;
@@ -1106,6 +1344,7 @@ export class GameScene extends Phaser.Scene {
     this.bossBar.show();
     this.nextBossChargeAt = time + 2500;
     this.nextBossRadialAt = time + 4200;
+    this.nextBossSupportNodeAt = time + 5200;
   }
 
   private pickBossEntrancePoint(): Phaser.Math.Vector2 {
@@ -1207,6 +1446,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    if (data.type === 'forge-boss' && time >= this.nextBossSupportNodeAt) {
+      this.nextBossSupportNodeAt = time + 9400;
+      const offset = new Phaser.Math.Vector2(-direction.y, direction.x).scale(210);
+      this.spawnEnergyNode(new Phaser.Math.Vector2(
+        Phaser.Math.Clamp(this.boss.x + offset.x, 110, WORLD.width - 110),
+        Phaser.Math.Clamp(this.boss.y + offset.y, 110, WORLD.height - 110),
+      ));
+    }
+
     if (this.bossRadialRing?.active) {
       this.bossRadialRing.setPosition(this.boss.x, this.boss.y);
     }
@@ -1291,11 +1539,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const riftBoss = this.boss.dataModel.type === 'rift-boss';
-    const projectileCount = riftBoss ? 14 : 12;
-    const offset = riftBoss ? this.time.now / 800 : 0;
+    const forgeBoss = this.boss.dataModel.type === 'forge-boss';
+    const projectileCount = riftBoss ? 14 : forgeBoss ? 10 : 12;
+    const offset = riftBoss ? this.time.now / 800 : forgeBoss ? Math.PI / 10 : 0;
     for (let i = 0; i < projectileCount; i += 1) {
       const angle = offset + (Math.PI * 2 * i) / projectileCount;
-      this.fireEnemyProjectile(this.boss.x, this.boss.y, angle, riftBoss ? 270 : 245, this.boss.dataModel.damage * (riftBoss ? 0.64 : 0.72));
+      this.fireEnemyProjectile(
+        this.boss.x,
+        this.boss.y,
+        angle,
+        riftBoss ? 270 : forgeBoss ? 250 : 245,
+        this.boss.dataModel.damage * (riftBoss ? 0.64 : forgeBoss ? 0.66 : 0.72),
+        'boss',
+      );
     }
     if (riftBoss && this.stage.hazard.enabled) {
       this.spawnStageHazard(this.time.now);
@@ -1382,6 +1638,12 @@ export class GameScene extends Phaser.Scene {
   private createSpawnFlash(x: number, y: number, color: number, radius: number): void {
     const ring = this.add.circle(x, y, radius, color, 0).setStrokeStyle(3, color, 0.42).setDepth(UI_DEPTH.effects);
     this.tweens.add({ targets: ring, scale: 1.35, alpha: 0, duration: 280, onComplete: () => ring.destroy() });
+  }
+
+  private createGuardianShieldPulse(x: number, y: number): void {
+    const color = this.stage.visualTheme.phase3;
+    const ring = this.add.circle(x, y, 34, color, 0.08).setStrokeStyle(3, color, 0.48).setDepth(UI_DEPTH.effects);
+    this.tweens.add({ targets: ring, scale: 1.7, alpha: 0, duration: 220, ease: 'Sine.Out', onComplete: () => ring.destroy() });
   }
 
   private createPickupBurst(x: number, y: number): void {
@@ -1486,6 +1748,23 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private updateTelemetryProgress(time: number): void {
+    if (time < this.nextTelemetryProgressAt) {
+      return;
+    }
+    this.nextTelemetryProgressAt = time + 1000;
+    const liveScore = this.score + calculateScoreBonus(this.elapsedSeconds, this.kills, this.eliteKills);
+    playtestTelemetry.recordRunProgress({
+      durationSeconds: this.elapsedSeconds,
+      score: liveScore,
+      coinsEarned: calculateCoins(liveScore, this.kills, false, false),
+      playerLevel: this.level,
+      kills: this.kills,
+      eliteKills: this.eliteKills,
+      remainingHp: Math.max(0, this.stats.currentHealth),
+    });
+  }
+
   private finishRun(victory: boolean): void {
     if (this.mode === 'game-over' || this.mode === 'victory') {
       return;
@@ -1497,6 +1776,7 @@ export class GameScene extends Phaser.Scene {
     const finalScore = this.score + calculateScoreBonus(this.elapsedSeconds, this.kills, this.eliteKills) + (victory ? this.stage.boss.scoreBonus : 0);
     const result: RunResult = {
       stageId: this.stage.id,
+      chapterId: this.stage.chapterId,
       victory,
       score: finalScore,
       kills: this.kills,
@@ -1506,6 +1786,9 @@ export class GameScene extends Phaser.Scene {
       coinsEarned: calculateCoins(finalScore, this.kills, victory, this.bossDefeated),
       playerLevel: this.level,
     };
+    if (victory && this.stage.id === 'stage-3' && !this.save.clearedChapterIds.includes(this.stage.chapterId)) {
+      playtestTelemetry.recordChapterCompleted(this.stage.chapterId, this.elapsedSeconds);
+    }
     playtestTelemetry.completeRun({
       result,
       durationSeconds: this.elapsedSeconds,

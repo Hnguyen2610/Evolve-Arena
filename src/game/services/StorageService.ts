@@ -1,9 +1,10 @@
 import { SAVE_KEY, SAVE_VERSION } from '../config/constants';
 import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
+import { CHAPTER_IDS } from '../data/chapters';
 import { DEFAULT_SAVE_DATA } from '../data/progression';
-import { DEFAULT_STAGE_ID, STAGE_IDS } from '../data/stages';
+import { DEFAULT_STAGE_ID, STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
 import { youtubePlayables, type YouTubePlayablesService } from './YouTubePlayablesService';
-import type { GameSaveData, PermanentUpgradeId, PermanentUpgradeState, StageId } from '../types';
+import type { ChapterId, GameSaveData, PermanentUpgradeId, PermanentUpgradeState, StageId } from '../types';
 
 export interface GameStorage {
   load(): Promise<GameSaveData>;
@@ -92,6 +93,7 @@ export function normalizeSaveData(input: unknown): GameSaveData {
   }
 
   const permanent = isRecord(input.permanentUpgrades) ? input.permanentUpgrades : {};
+  const clearedStageIds = normalizeStageIds(input.clearedStageIds, []);
   return {
     version: SAVE_VERSION,
     bestScore: safeNonNegativeInt(input.bestScore),
@@ -101,8 +103,9 @@ export function normalizeSaveData(input: unknown): GameSaveData {
       health: safeUpgradeLevel('health', permanent.health),
       speed: safeUpgradeLevel('speed', permanent.speed),
     },
-    unlockedStageIds: normalizeStageIds(input.unlockedStageIds, [DEFAULT_STAGE_ID]),
-    clearedStageIds: normalizeStageIds(input.clearedStageIds, []),
+    unlockedStageIds: deriveUnlockedStageIds(normalizeStageIds(input.unlockedStageIds, [DEFAULT_STAGE_ID]), clearedStageIds),
+    clearedStageIds,
+    clearedChapterIds: normalizeChapterIds(input.clearedChapterIds, []),
   };
 }
 
@@ -112,6 +115,7 @@ export function cloneDefaultSave(): GameSaveData {
     permanentUpgrades: { ...DEFAULT_SAVE_DATA.permanentUpgrades },
     unlockedStageIds: [...DEFAULT_SAVE_DATA.unlockedStageIds],
     clearedStageIds: [...DEFAULT_SAVE_DATA.clearedStageIds],
+    clearedChapterIds: [...DEFAULT_SAVE_DATA.clearedChapterIds],
   };
 }
 
@@ -133,6 +137,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeStageIds(value: unknown, fallback: StageId[]): StageId[] {
   const source = Array.isArray(value) ? value : fallback;
   return STAGE_IDS.filter((stageId) => source.includes(stageId));
+}
+
+function normalizeChapterIds(value: unknown, fallback: ChapterId[]): ChapterId[] {
+  const source = Array.isArray(value) ? value : fallback;
+  return CHAPTER_IDS.filter((chapterId) => source.includes(chapterId));
+}
+
+function deriveUnlockedStageIds(unlockedStageIds: StageId[], clearedStageIds: StageId[]): StageId[] {
+  let derived = [...unlockedStageIds];
+  clearedStageIds.forEach((stageId) => {
+    const nextStageId = STAGE_DEFINITIONS[stageId].unlocksOnClear;
+    if (nextStageId) {
+      derived = STAGE_IDS.filter((candidate) => candidate === nextStageId || derived.includes(candidate));
+    }
+  });
+  return derived;
 }
 
 function clampInt(value: number, min: number, max: number): number {

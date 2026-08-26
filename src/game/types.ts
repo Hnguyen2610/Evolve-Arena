@@ -1,8 +1,23 @@
 export type GameMode = 'menu' | 'playing' | 'level-up' | 'paused' | 'game-over' | 'victory';
 
-export type StageId = 'stage-1' | 'stage-2';
+export type ChapterId = 'chapter-1';
 
-export type EnemyType = 'basic' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'orbiter' | 'pulse-caster' | 'boss' | 'rift-boss';
+export type StageId = 'stage-1' | 'stage-2' | 'stage-3';
+
+export type EnemyType =
+  | 'basic'
+  | 'runner'
+  | 'tank'
+  | 'ranged'
+  | 'swarm'
+  | 'orbiter'
+  | 'pulse-caster'
+  | 'guardian'
+  | 'disruptor'
+  | 'energy-node'
+  | 'boss'
+  | 'rift-boss'
+  | 'forge-boss';
 
 export type UpgradeRarity = 'common' | 'rare' | 'epic';
 
@@ -40,7 +55,7 @@ export interface EnemyDefinition {
   score: number;
   radius: number;
   tint: number;
-  behavior: 'chase' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'boss';
+  behavior: 'chase' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'guardian' | 'disruptor' | 'node' | 'boss';
 }
 
 export interface EnemyRuntimeData {
@@ -62,6 +77,7 @@ export interface EnemyRuntimeData {
 
 export interface ProjectileData {
   owner: 'player' | 'enemy';
+  source?: 'enemy' | 'boss' | 'energy-node';
   damage: number;
   pierceLeft: number;
   expiresAt: number;
@@ -101,10 +117,12 @@ export interface GameSaveData {
   permanentUpgrades: PermanentUpgradeState;
   unlockedStageIds: StageId[];
   clearedStageIds: StageId[];
+  clearedChapterIds: ChapterId[];
 }
 
 export interface RunResult {
   stageId: StageId;
+  chapterId: ChapterId;
   victory: boolean;
   score: number;
   kills: number;
@@ -141,6 +159,20 @@ export interface StageHazardConfig {
   damage: number;
 }
 
+export interface StageEnergyNodeConfig {
+  enabled: boolean;
+  startSeconds: number;
+  baseIntervalMs: number;
+  lateIntervalMs: number;
+  lateStartSeconds: number;
+  telegraphMs: number;
+  pulseProjectileCount: number;
+  projectileSpeed: number;
+  projectileDamage: number;
+  maxActiveEarly: number;
+  maxActiveLate: number;
+}
+
 export interface StageBossConfig {
   type: EnemyType;
   name: string;
@@ -152,12 +184,14 @@ export interface StageBossConfig {
 
 export interface StageDefinition {
   id: StageId;
+  chapterId: ChapterId;
   number: number;
   name: string;
   subtitle: string;
   description: string;
   bossName: string;
   unlocksOnClear?: StageId;
+  firstClearReward: number;
   visualTheme: StageVisualTheme;
   bossSpawnSeconds: number;
   spawnIntervalMultiplier: number;
@@ -166,4 +200,14 @@ export interface StageDefinition {
   enemyUnlocks: Array<{ atSeconds: number; types: EnemyType[] }>;
   boss: StageBossConfig;
   hazard: StageHazardConfig;
+  energyNode: StageEnergyNodeConfig;
+}
+
+export interface ChapterDefinition {
+  id: ChapterId;
+  number: number;
+  name: string;
+  subtitle: string;
+  stageIds: StageId[];
+  completionReward: number;
 }

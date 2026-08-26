@@ -1,5 +1,5 @@
-import type { GameSaveData, RunResult, StageId } from '../types';
-import { markStageCleared } from './StageProgressionSystem';
+import type { ChapterId, GameSaveData, RunResult, StageId } from '../types';
+import { applyStageVictoryProgression } from './StageProgressionSystem';
 
 interface ResultPersistenceDependencies {
   save(data: GameSaveData): Promise<boolean>;
@@ -13,6 +13,10 @@ export interface ResultPersistenceOutcome {
   persisted: boolean;
   scoreSubmitted: boolean;
   newlyUnlockedStageId: StageId | null;
+  firstClearedStageId: StageId | null;
+  stageRewardCoins: number;
+  completedChapterId: ChapterId | null;
+  chapterRewardCoins: number;
 }
 
 export async function persistResultAndMaybeSendScore(
@@ -26,7 +30,16 @@ export async function persistResultAndMaybeSendScore(
     bestScore: Math.max(save.bestScore, result.score),
     coins: save.coins + result.coinsEarned,
   };
-  const stageProgression = result.victory ? markStageCleared(scoredSave, result.stageId) : { save: scoredSave, newlyUnlockedStageId: null };
+  const stageProgression = result.victory
+    ? applyStageVictoryProgression(scoredSave, result.stageId)
+    : {
+      save: scoredSave,
+      newlyUnlockedStageId: null,
+      firstClearedStageId: null,
+      stageRewardCoins: 0,
+      completedChapterId: null,
+      chapterRewardCoins: 0,
+    };
   const nextSave = stageProgression.save;
 
   if (newBest) {
@@ -41,5 +54,9 @@ export async function persistResultAndMaybeSendScore(
     persisted,
     scoreSubmitted,
     newlyUnlockedStageId: stageProgression.newlyUnlockedStageId,
+    firstClearedStageId: stageProgression.firstClearedStageId,
+    stageRewardCoins: stageProgression.stageRewardCoins,
+    completedChapterId: stageProgression.completedChapterId,
+    chapterRewardCoins: stageProgression.chapterRewardCoins,
   };
 }

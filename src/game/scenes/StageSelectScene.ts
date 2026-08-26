@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
+import { CHAPTER_DEFINITIONS, CHAPTER_IDS } from '../data/chapters';
 import { STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
-import { getClearedStageIds, isStageUnlocked } from '../systems/StageProgressionSystem';
+import { getClearedChapterIds, getClearedStageIds, isStageUnlocked } from '../systems/StageProgressionSystem';
 import type { GameSaveData, StageDefinition } from '../types';
 
 interface StageSelectSceneData {
@@ -35,10 +36,10 @@ export class StageSelectScene extends Phaser.Scene {
     const shortLandscape = width > height && height < 520;
     this.addBackdrop(width, height);
 
-    const titleY = shortLandscape ? 42 : Math.max(74, height * 0.12);
+    const titleY = shortLandscape ? 34 : Math.max(72, height * 0.1);
     this.addNode(
       this.add
-        .text(width / 2, titleY, 'SELECT STAGE', {
+        .text(width / 2, titleY, 'CHAPTER 1', {
           color: '#f7fbff',
           fontFamily: 'Arial Black, Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '28px' : `${Math.min(44, Math.max(32, width * 0.06))}px`,
@@ -48,16 +49,30 @@ export class StageSelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
+    const chapter = CHAPTER_DEFINITIONS[CHAPTER_IDS[0]];
+    const chapterCleared = getClearedChapterIds(this.save).includes(chapter.id);
+    this.addNode(
+      this.add
+        .text(width / 2, titleY + (shortLandscape ? 30 : 42), `${chapter.name.toUpperCase()}  |  ${chapterCleared ? 'CLEARED' : chapter.subtitle}`, {
+          color: chapterCleared ? '#9ff7db' : '#d7edff',
+          fontFamily: 'Arial, Helvetica, sans-serif',
+          fontSize: shortLandscape ? '12px' : '14px',
+          fontStyle: '900',
+          align: 'center',
+          wordWrap: { width: Math.min(width - 44, 620) },
+        })
+        .setOrigin(0.5),
+    );
 
     const clearedIds = getClearedStageIds(this.save);
-    const cardWidth = shortLandscape ? Math.min(350, (width - 92) / 2) : Math.min(420, width - 42);
-    const cardHeight = shortLandscape ? 188 : 158;
-    const startY = shortLandscape ? height * 0.52 : titleY + 112;
-    const gap = shortLandscape ? cardWidth + 28 : cardHeight + 24;
+    const cardWidth = shortLandscape ? Math.min(262, (width - 96) / 3) : Math.min(420, width - 42);
+    const cardHeight = shortLandscape ? 166 : 132;
+    const startY = shortLandscape ? height * 0.56 : titleY + 132;
+    const gap = shortLandscape ? cardWidth + 20 : cardHeight + 16;
 
     STAGE_IDS.forEach((stageId, index) => {
       const stage = STAGE_DEFINITIONS[stageId];
-      const x = shortLandscape ? width / 2 + (index - 0.5) * gap : width / 2;
+      const x = shortLandscape ? width / 2 + (index - 1) * gap : width / 2;
       const y = shortLandscape ? startY : startY + index * gap;
       const unlocked = isStageUnlocked(this.save, stageId);
       const cleared = clearedIds.includes(stageId);
@@ -114,11 +129,12 @@ export class StageSelectScene extends Phaser.Scene {
         fontStyle: '800',
       })
       .setOrigin(0, 0.5);
+    const lockMessage = stage.id === 'stage-3' ? 'Clear Stage 2 to unlock.' : 'Clear Stage 1 to unlock.';
     const description = this.add
-      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 86 : 92), unlocked ? stage.description : 'Clear Stage 1 to unlock.', {
+      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 80 : 82), unlocked ? stage.description : lockMessage, {
         color: unlocked ? COLORS.uiTextMuted : '#7f8ba3',
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: shortLandscape ? '12px' : '13px',
+        fontSize: shortLandscape ? '11px' : '12px',
         fontStyle: '700',
         wordWrap: { width: width - 44 },
       })

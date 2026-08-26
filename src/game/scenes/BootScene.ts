@@ -116,6 +116,9 @@ export class BootScene extends Phaser.Scene {
     this.makeSwarmTexture();
     this.makeOrbiterTexture();
     this.makePulseCasterTexture();
+    this.makeGuardianTexture();
+    this.makeDisruptorTexture();
+    this.makeEnergyNodeTexture();
     this.makeEliteRingTexture();
   }
 
@@ -287,6 +290,65 @@ export class BootScene extends Phaser.Scene {
     graphics.destroy();
   }
 
+  private makeGuardianTexture(): void {
+    const colors = ENEMY_COLORS.guardian;
+    const graphics = this.add.graphics();
+    graphics.fillStyle(colors.stroke, 1);
+    this.drawOctagon(graphics, 24, 24, 23);
+    graphics.fillStyle(colors.fill, 1);
+    this.drawOctagon(graphics, 24, 24, 18);
+    graphics.lineStyle(4, colors.core, 0.75);
+    graphics.beginPath();
+    graphics.arc(24, 24, 15, Math.PI * 0.12, Math.PI * 0.72);
+    graphics.strokePath();
+    graphics.beginPath();
+    graphics.arc(24, 24, 15, Math.PI * 1.12, Math.PI * 1.72);
+    graphics.strokePath();
+    graphics.fillStyle(colors.core, 1);
+    graphics.fillTriangle(24, 9, 35, 32, 24, 28);
+    graphics.fillTriangle(24, 9, 13, 32, 24, 28);
+    graphics.generateTexture('enemy-guardian', 48, 48);
+    graphics.destroy();
+  }
+
+  private makeDisruptorTexture(): void {
+    const colors = ENEMY_COLORS.disruptor;
+    const graphics = this.add.graphics();
+    graphics.fillStyle(colors.stroke, 1);
+    graphics.fillTriangle(22, 0, 44, 28, 26, 22);
+    graphics.fillTriangle(22, 0, 0, 28, 18, 22);
+    graphics.fillRect(7, 22, 30, 12);
+    graphics.fillStyle(colors.fill, 1);
+    graphics.fillTriangle(22, 5, 35, 27, 24, 22);
+    graphics.fillTriangle(22, 5, 9, 27, 20, 22);
+    graphics.fillRect(11, 24, 22, 7);
+    graphics.lineStyle(3, colors.core, 0.82);
+    graphics.lineBetween(22, 6, 22, 39);
+    graphics.lineBetween(12, 28, 32, 28);
+    graphics.fillStyle(colors.core, 1);
+    graphics.fillCircle(22, 28, 5);
+    graphics.generateTexture('enemy-disruptor', 44, 44);
+    graphics.destroy();
+  }
+
+  private makeEnergyNodeTexture(): void {
+    const colors = ENEMY_COLORS['energy-node'];
+    this.makeGlowTexture('energy-node-glow', 92, colors.fill, 0.25);
+    const graphics = this.add.graphics();
+    graphics.fillStyle(colors.stroke, 1);
+    this.drawDiamond(graphics, 25, 0, 50);
+    graphics.fillStyle(colors.fill, 1);
+    this.drawDiamond(graphics, 25, 6, 38);
+    graphics.lineStyle(3, colors.core, 0.85);
+    this.strokeDiamond(graphics, 25, 9, 32);
+    graphics.fillStyle(0x53330d, 0.92);
+    graphics.fillCircle(25, 25, 12);
+    graphics.fillStyle(colors.core, 1);
+    graphics.fillCircle(25, 25, 6);
+    graphics.generateTexture('enemy-energy-node', 50, 50);
+    graphics.destroy();
+  }
+
   private makeEliteRingTexture(): void {
     const graphics = this.add.graphics();
     graphics.lineStyle(4, COLORS.elite, 0.92);
@@ -308,6 +370,7 @@ export class BootScene extends Phaser.Scene {
   private makeBossTexture(): void {
     this.makeGlowTexture('boss-glow', 190, COLORS.boss, 0.22);
     this.makeGlowTexture('rift-boss-glow', 190, 0xff68f0, 0.24);
+    this.makeGlowTexture('forge-boss-glow', 198, 0xffa53d, 0.26);
     const size = 120;
     const graphics = this.add.graphics();
     const center = size / 2;
@@ -359,6 +422,7 @@ export class BootScene extends Phaser.Scene {
     ring.destroy();
 
     this.makeRiftBossTexture();
+    this.makeForgeBossTexture();
   }
 
   private makeRiftBossTexture(): void {
@@ -396,6 +460,47 @@ export class BootScene extends Phaser.Scene {
     ring.lineStyle(2, 0x8f6dff, 0.64);
     ring.strokeCircle(64, 64, 42);
     ring.generateTexture('rift-boss-ring', 128, 128);
+    ring.destroy();
+  }
+
+  private makeForgeBossTexture(): void {
+    const size = 124;
+    const graphics = this.add.graphics();
+    const center = size / 2;
+    graphics.fillStyle(0x25160c, 1);
+    this.drawPolygon(graphics, center, center, [58, 40, 56, 40, 58, 40], Math.PI / 6);
+    graphics.fillStyle(0x27586b, 1);
+    this.drawPolygon(graphics, center, center, [48, 34, 48, 34, 48, 34], Math.PI / 6);
+    graphics.lineStyle(6, 0xffa53d, 0.85);
+    graphics.strokeCircle(center, center, 48);
+    graphics.lineStyle(3, 0xffd166, 0.72);
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      graphics.lineBetween(center + Math.cos(angle) * 20, center + Math.sin(angle) * 20, center + Math.cos(angle) * 55, center + Math.sin(angle) * 55);
+    }
+    graphics.fillStyle(0xffa53d, 1);
+    this.drawOctagon(graphics, center, center, 28);
+    graphics.fillStyle(0xfff1b8, 1);
+    graphics.fillCircle(center, center, 13);
+    graphics.fillStyle(0x3a1f10, 1);
+    graphics.fillCircle(center, center, 6);
+    graphics.generateTexture('forge-boss', size, size);
+    graphics.destroy();
+
+    const ring = this.add.graphics();
+    ring.lineStyle(5, 0xffa53d, 0.82);
+    for (let i = 0; i < 6; i += 1) {
+      const start = (Math.PI * 2 * i) / 6 + 0.04;
+      ring.beginPath();
+      ring.arc(66, 66, 59, start, start + Math.PI * 0.23);
+      ring.strokePath();
+      const angle = start + Math.PI * 0.12;
+      ring.fillStyle(0xffd166, 0.95);
+      ring.fillCircle(66 + Math.cos(angle) * 54, 66 + Math.sin(angle) * 54, 4);
+    }
+    ring.lineStyle(2, 0x69e7ff, 0.58);
+    ring.strokeCircle(66, 66, 43);
+    ring.generateTexture('forge-boss-ring', 132, 132);
     ring.destroy();
   }
 

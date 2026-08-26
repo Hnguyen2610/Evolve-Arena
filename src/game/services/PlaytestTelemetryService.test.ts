@@ -4,6 +4,7 @@ import { PlaytestTelemetryService } from './PlaytestTelemetryService';
 
 const result: RunResult = {
   stageId: 'stage-1',
+  chapterId: 'chapter-1',
   victory: false,
   score: 8420,
   kills: 44,
@@ -35,9 +36,24 @@ describe('PlaytestTelemetryService', () => {
 
   it('records the selected stage for a run', () => {
     const telemetry = createService();
-    telemetry.beginRun('new', 'stage-2');
+    telemetry.beginRun('new', 'stage-2', 'chapter-1');
 
     expect(telemetry.getCurrentRun()?.stageId).toBe('stage-2');
+    expect(telemetry.getCurrentRun()?.chapterId).toBe('chapter-1');
+  });
+
+  it('records energy node pressure metrics for stage 3 QA', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-3', 'chapter-1');
+    telemetry.recordEnergyNodeSpawned(21.2);
+    telemetry.recordEnergyNodeDestroyed(27.8);
+    telemetry.recordEnergyNodePressureHit(34.1);
+
+    expect(telemetry.getCurrentRun()).toMatchObject({
+      energyNodesSpawned: 1,
+      energyNodesDestroyed: 1,
+      energyNodePressureHits: 1,
+    });
   });
 
   it('records upgrade picks with before and after levels plus offered choices', () => {
@@ -69,6 +85,44 @@ describe('PlaytestTelemetryService', () => {
     expect(run?.bossReachedSeconds).toBe(90.2);
     expect(run?.bossDefeated).toBe(true);
     expect(run?.bossFightDurationSeconds).toBe(18.4);
+  });
+
+  it('updates live run progress without completing the run', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-3', 'chapter-1');
+    telemetry.recordRunProgress({
+      durationSeconds: 44.24,
+      score: 1234,
+      coinsEarned: 18,
+      playerLevel: 4,
+      kills: 22,
+      eliteKills: 1,
+      remainingHp: 77.35,
+    });
+
+    expect(telemetry.getCurrentRun()).toMatchObject({
+      durationSeconds: 44.2,
+      score: 1234,
+      coinsEarned: 18,
+      playerLevel: 4,
+      kills: 22,
+      eliteKills: 1,
+      remainingHp: 77.4,
+    });
+    expect(telemetry.getSessionSummary().runsCompleted).toBe(0);
+  });
+
+  it('records chapter completion before a completed run is exported', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-3', 'chapter-1');
+    telemetry.recordChapterCompleted('chapter-1', 96.1);
+    telemetry.completeRun({ result: { ...result, stageId: 'stage-3', victory: true, bossDefeated: true }, durationSeconds: 96.1, remainingHp: 42 });
+
+    expect(telemetry.getCompletedRuns()[0].events).toContainEqual({
+      name: 'chapter_completed',
+      atSeconds: 96.1,
+      payload: { chapterId: 'chapter-1' },
+    });
   });
 
   it('uses gameplay duration instead of wall-clock duration when completing a run', () => {

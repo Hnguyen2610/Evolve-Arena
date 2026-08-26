@@ -1,5 +1,6 @@
+import { DEFAULT_CHAPTER_ID } from '../data/chapters';
 import { DEFAULT_STAGE_ID } from '../data/stages';
-import type { RunResult, StageId } from '../types';
+import type { ChapterId, RunResult, StageId } from '../types';
 
 export type PlaytestEventName =
   | 'game_started'
@@ -9,6 +10,10 @@ export type PlaytestEventName =
   | 'elite_killed'
   | 'boss_reached'
   | 'boss_defeated'
+  | 'energy_node_spawned'
+  | 'energy_node_destroyed'
+  | 'energy_node_pressure_hit'
+  | 'chapter_completed'
   | 'player_died'
   | 'run_completed'
   | 'replay_started';
@@ -29,6 +34,7 @@ export interface PlaytestEvent {
 
 export interface PlaytestRunTelemetry {
   runId: string;
+  chapterId: ChapterId;
   stageId: StageId;
   startTimestamp: number;
   endTimestamp: number | null;
@@ -44,6 +50,9 @@ export interface PlaytestRunTelemetry {
   bossReachedSeconds: number | null;
   bossDefeated: boolean;
   bossFightDurationSeconds: number | null;
+  energyNodesSpawned: number;
+  energyNodesDestroyed: number;
+  energyNodePressureHits: number;
   damageTaken: number;
   remainingHp: number | null;
   upgradesSelected: UpgradeSelectionTelemetry[];
@@ -113,7 +122,7 @@ export class PlaytestTelemetryService {
     }
   }
 
-  beginRun(source: 'new' | 'replay' = 'new', stageId: StageId = DEFAULT_STAGE_ID): void {
+  beginRun(source: 'new' | 'replay' = 'new', stageId: StageId = DEFAULT_STAGE_ID, chapterId: ChapterId = DEFAULT_CHAPTER_ID): void {
     if (!this.options.enabled) {
       return;
     }
@@ -126,6 +135,7 @@ export class PlaytestTelemetryService {
 
     this.currentRun = {
       runId: `run-${this.runCounter}`,
+      chapterId,
       stageId,
       startTimestamp: this.now(),
       endTimestamp: null,
@@ -141,6 +151,9 @@ export class PlaytestTelemetryService {
       bossReachedSeconds: null,
       bossDefeated: false,
       bossFightDurationSeconds: null,
+      energyNodesSpawned: 0,
+      energyNodesDestroyed: 0,
+      energyNodePressureHits: 0,
       damageTaken: 0,
       remainingHp: null,
       upgradesSelected: [],
@@ -212,11 +225,60 @@ export class PlaytestTelemetryService {
     return true;
   }
 
+  recordEnergyNodeSpawned(seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.energyNodesSpawned += 1;
+    this.recordEvent('energy_node_spawned', seconds);
+  }
+
+  recordEnergyNodeDestroyed(seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.energyNodesDestroyed += 1;
+    this.recordEvent('energy_node_destroyed', seconds);
+  }
+
+  recordEnergyNodePressureHit(seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.energyNodePressureHits += 1;
+    this.recordEvent('energy_node_pressure_hit', seconds);
+  }
+
+  recordChapterCompleted(chapterId: ChapterId, seconds: number): void {
+    this.recordEvent('chapter_completed', seconds, { chapterId });
+  }
+
   recordDamageTaken(amount: number): void {
     if (!this.currentRun) {
       return;
     }
     this.currentRun.damageTaken += Math.max(0, amount);
+  }
+
+  recordRunProgress(input: {
+    durationSeconds: number;
+    score: number;
+    coinsEarned: number;
+    playerLevel: number;
+    kills: number;
+    eliteKills: number;
+    remainingHp: number;
+  }): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.durationSeconds = roundSeconds(input.durationSeconds);
+    this.currentRun.score = input.score;
+    this.currentRun.coinsEarned = input.coinsEarned;
+    this.currentRun.playerLevel = input.playerLevel;
+    this.currentRun.kills = input.kills;
+    this.currentRun.eliteKills = input.eliteKills;
+    this.currentRun.remainingHp = roundSeconds(input.remainingHp);
   }
 
   completeRun(input: CompleteRunInput): PlaytestRunTelemetry | null {

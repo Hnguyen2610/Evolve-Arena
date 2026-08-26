@@ -1,16 +1,25 @@
-import { DEFAULT_STAGE_ID, STAGE_IDS } from '../data/stages';
-import type { GameSaveData, StageId } from '../types';
+import { CHAPTER_DEFINITIONS, CHAPTER_IDS } from '../data/chapters';
+import { DEFAULT_STAGE_ID, STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
+import type { ChapterId, GameSaveData, StageId } from '../types';
 
 export function getUnlockedStageIds(save: GameSaveData): StageId[] {
-  return normalizeStageIds(save.unlockedStageIds, [DEFAULT_STAGE_ID]);
+  return deriveUnlockedStageIds(normalizeStageIds(save.unlockedStageIds, [DEFAULT_STAGE_ID]), getClearedStageIds(save));
 }
 
 export function getClearedStageIds(save: GameSaveData): StageId[] {
   return normalizeStageIds(save.clearedStageIds, []);
 }
 
+export function getClearedChapterIds(save: GameSaveData): ChapterId[] {
+  return normalizeChapterIds(save.clearedChapterIds, []);
+}
+
 export function isStageUnlocked(save: GameSaveData, stageId: StageId): boolean {
   return getUnlockedStageIds(save).includes(stageId);
+}
+
+export function isChapterCleared(save: GameSaveData, chapterId: ChapterId): boolean {
+  return getClearedChapterIds(save).includes(chapterId);
 }
 
 export function markStageCleared(save: GameSaveData, stageId: StageId): {
@@ -19,7 +28,7 @@ export function markStageCleared(save: GameSaveData, stageId: StageId): {
 } {
   const clearedStageIds = addStageId(getClearedStageIds(save), stageId);
   const unlockedStageIds = getUnlockedStageIds(save);
-  const nextStageId = stageId === 'stage-1' ? 'stage-2' : null;
+  const nextStageId = STAGE_DEFINITIONS[stageId].unlocksOnClear ?? null;
   const newlyUnlockedStageId = nextStageId && !unlockedStageIds.includes(nextStageId) ? nextStageId : null;
 
   return {
@@ -27,8 +36,43 @@ export function markStageCleared(save: GameSaveData, stageId: StageId): {
       ...save,
       clearedStageIds,
       unlockedStageIds: newlyUnlockedStageId ? addStageId(unlockedStageIds, newlyUnlockedStageId) : unlockedStageIds,
+      clearedChapterIds: getClearedChapterIds(save),
     },
     newlyUnlockedStageId,
+  };
+}
+
+export function applyStageVictoryProgression(save: GameSaveData, stageId: StageId): {
+  save: GameSaveData;
+  newlyUnlockedStageId: StageId | null;
+  firstClearedStageId: StageId | null;
+  stageRewardCoins: number;
+  completedChapterId: ChapterId | null;
+  chapterRewardCoins: number;
+} {
+  const wasStageCleared = getClearedStageIds(save).includes(stageId);
+  const stageProgression = markStageCleared(save, stageId);
+  const nextSave = stageProgression.save;
+  const stage = STAGE_DEFINITIONS[stageId];
+  const chapter = CHAPTER_DEFINITIONS[stage.chapterId];
+  const clearedStageIds = getClearedStageIds(nextSave);
+  const clearedChapterIds = getClearedChapterIds(nextSave);
+  const chapterCompleted = chapter.stageIds.every((chapterStageId) => clearedStageIds.includes(chapterStageId));
+  const newlyCompletedChapter = chapterCompleted && !clearedChapterIds.includes(chapter.id);
+  const stageRewardCoins = wasStageCleared ? 0 : stage.firstClearReward;
+  const chapterRewardCoins = newlyCompletedChapter ? chapter.completionReward : 0;
+
+  return {
+    save: {
+      ...nextSave,
+      coins: nextSave.coins + stageRewardCoins + chapterRewardCoins,
+      clearedChapterIds: newlyCompletedChapter ? addChapterId(clearedChapterIds, chapter.id) : clearedChapterIds,
+    },
+    newlyUnlockedStageId: stageProgression.newlyUnlockedStageId,
+    firstClearedStageId: wasStageCleared ? null : stageId,
+    stageRewardCoins,
+    completedChapterId: newlyCompletedChapter ? chapter.id : null,
+    chapterRewardCoins,
   };
 }
 
@@ -37,6 +81,26 @@ function normalizeStageIds(value: unknown, fallback: StageId[]): StageId[] {
   return STAGE_IDS.filter((stageId) => ids.includes(stageId));
 }
 
+function normalizeChapterIds(value: unknown, fallback: ChapterId[]): ChapterId[] {
+  const ids = Array.isArray(value) ? value : fallback;
+  return CHAPTER_IDS.filter((chapterId) => ids.includes(chapterId));
+}
+
+function deriveUnlockedStageIds(unlockedStageIds: StageId[], clearedStageIds: StageId[]): StageId[] {
+  let derived = [...unlockedStageIds];
+  clearedStageIds.forEach((stageId) => {
+    const nextStageId = STAGE_DEFINITIONS[stageId].unlocksOnClear;
+    if (nextStageId) {
+      derived = addStageId(derived, nextStageId);
+    }
+  });
+  return derived;
+}
+
 function addStageId(stageIds: StageId[], stageId: StageId): StageId[] {
   return STAGE_IDS.filter((candidate) => candidate === stageId || stageIds.includes(candidate));
+}
+
+function addChapterId(chapterIds: ChapterId[], chapterId: ChapterId): ChapterId[] {
+  return CHAPTER_IDS.filter((candidate) => candidate === chapterId || chapterIds.includes(candidate));
 }

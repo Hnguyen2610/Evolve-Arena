@@ -15,16 +15,29 @@ describe('StorageService', () => {
     expect(save.permanentUpgrades.health).toBe(0);
     expect(save.unlockedStageIds).toEqual(['stage-1']);
     expect(save.clearedStageIds).toEqual([]);
+    expect(save.clearedChapterIds).toEqual([]);
   });
 
   it('normalizes persisted stage progress', () => {
     const save = parseSaveData(JSON.stringify({
       unlockedStageIds: ['stage-2', 'missing', 'stage-1'],
-      clearedStageIds: ['stage-1', 'missing'],
+      clearedStageIds: ['stage-1', 'stage-2', 'missing'],
+      clearedChapterIds: ['chapter-1', 'missing'],
     }));
 
-    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2']);
-    expect(save.clearedStageIds).toEqual(['stage-1']);
+    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3']);
+    expect(save.clearedStageIds).toEqual(['stage-1', 'stage-2']);
+    expect(save.clearedChapterIds).toEqual(['chapter-1']);
+  });
+
+  it('migrates old stage 1 and 2 clear saves to unlock stage 3 without clearing chapter 1', () => {
+    const save = parseSaveData(JSON.stringify({
+      unlockedStageIds: ['stage-1', 'stage-2'],
+      clearedStageIds: ['stage-1', 'stage-2'],
+    }));
+
+    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3']);
+    expect(save.clearedChapterIds).toEqual([]);
   });
 
   it('clones default stage arrays independently', () => {
@@ -32,8 +45,10 @@ describe('StorageService', () => {
     const second = cloneDefaultSave();
 
     first.unlockedStageIds.push('stage-2');
+    first.clearedChapterIds.push('chapter-1');
 
     expect(second.unlockedStageIds).toEqual(['stage-1']);
+    expect(second.clearedChapterIds).toEqual([]);
   });
 
   it('clamps permanent upgrade levels to supported maximums', () => {
