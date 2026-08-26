@@ -68,6 +68,8 @@ const saveFixture = {
   bestScore: 999999,
   coins: 999999,
   permanentUpgrades: { damage: 20, health: 20, speed: 15 },
+  unlockedStageIds: ['stage-1', 'stage-2'],
+  clearedStageIds: ['stage-1'],
 };
 const saveBytes = new TextEncoder().encode(JSON.stringify(saveFixture)).length;
 const failures = [];

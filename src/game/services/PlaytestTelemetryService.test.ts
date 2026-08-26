@@ -3,6 +3,7 @@ import type { RunResult } from '../types';
 import { PlaytestTelemetryService } from './PlaytestTelemetryService';
 
 const result: RunResult = {
+  stageId: 'stage-1',
   victory: false,
   score: 8420,
   kills: 44,
@@ -30,6 +31,13 @@ describe('PlaytestTelemetryService', () => {
     expect(telemetry.recordFirstLevelUp(14.2)).toBe(false);
 
     expect(telemetry.getCurrentRun()?.firstLevelUpSeconds).toBe(10.7);
+  });
+
+  it('records the selected stage for a run', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-2');
+
+    expect(telemetry.getCurrentRun()?.stageId).toBe('stage-2');
   });
 
   it('records upgrade picks with before and after levels plus offered choices', () => {

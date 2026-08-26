@@ -3,6 +3,7 @@ import { BOSS_BALANCE, createPlayerStats } from '../config/balance';
 import { GAME_TIMING, UI_DEPTH, WORLD } from '../config/constants';
 import { COLORS, cssColor } from '../config/visual';
 import { ENEMY_DEFINITIONS } from '../data/enemies';
+import { DEFAULT_STAGE_ID, getStageDefinition, isStageId } from '../data/stages';
 import { Enemy } from '../entities/Enemy';
 import { ExperienceOrb } from '../entities/ExperienceOrb';
 import { Player } from '../entities/Player';
@@ -20,13 +21,17 @@ import { getDifficulty } from '../systems/DifficultySystem';
 import { addXp } from '../systems/LevelSystem';
 import { calculateCoins, calculateScoreBonus } from '../systems/ScoreSystem';
 import { applyUpgrade, pickUpgradeOptions } from '../systems/UpgradeSystem';
+import { isStageUnlocked } from '../systems/StageProgressionSystem';
 import type {
+  EnemyDefinition,
   EnemyRuntimeData,
   EnemyType,
   GameMode,
   GameSaveData,
   PlayerStats,
   RunResult,
+  StageDefinition,
+  StageId,
   UpgradeDefinition,
   UpgradeState,
 } from '../types';
@@ -34,6 +39,18 @@ import type {
 interface GameSceneData {
   save?: GameSaveData;
   replay?: boolean;
+  stageId?: StageId;
+}
+
+interface StageHazardInstance {
+  zone: Phaser.GameObjects.Arc;
+  core: Phaser.GameObjects.Arc;
+  x: number;
+  y: number;
+  radius: number;
+  activeAt: number;
+  expiresAt: number;
+  damageApplied: boolean;
 }
 
 export class GameScene extends Phaser.Scene {
@@ -55,6 +72,7 @@ export class GameScene extends Phaser.Scene {
   private foregroundFx!: Phaser.GameObjects.Graphics;
   private audio = gameAudio;
   private analytics = new MemoryAnalyticsService();
+  private stage: StageDefinition = getStageDefinition(DEFAULT_STAGE_ID);
   private replayStart = false;
   private currentOfferedUpgradeIds: string[] = [];
   private upgrades: UpgradeState = {};
@@ -81,6 +99,8 @@ export class GameScene extends Phaser.Scene {
   private nextMoveSparkAt = 0;
   private arenaVisualPhase = -1;
   private nextAmbientSparkAt = 0;
+  private nextStageHazardAt = 0;
+  private stageHazards: StageHazardInstance[] = [];
 
   constructor() {
     super('GameScene');
@@ -89,12 +109,15 @@ export class GameScene extends Phaser.Scene {
   init(data: GameSceneData): void {
     this.save = data.save ?? cloneDefaultSave();
     this.replayStart = data.replay === true;
+    const requestedStageId = isStageId(data.stageId) ? data.stageId : DEFAULT_STAGE_ID;
+    const playableStageId = isStageUnlocked(this.save, requestedStageId) ? requestedStageId : DEFAULT_STAGE_ID;
+    this.stage = getStageDefinition(playableStageId);
   }
 
   create(): void {
     this.resetRunState();
     setLatestSaveSnapshot(this.save);
-    playtestTelemetry.beginRun(this.replayStart ? 'replay' : 'new');
+    playtestTelemetry.beginRun(this.replayStart ? 'replay' : 'new', this.stage.id);
     this.physics.world.resume();
     this.stats = createPlayerStats(this.save.permanentUpgrades);
     this.createWorld();
@@ -109,8 +132,8 @@ export class GameScene extends Phaser.Scene {
     this.registerPhysics();
     this.registerLifecycle();
     this.registerAudioUnlock();
-    this.hud.showHint('Move to survive. Attacks are automatic.');
-    this.analytics.track(this.replayStart ? 'replay_started' : 'game_started');
+    this.hud.showHint(`${this.stage.name}: move to survive.`);
+    this.analytics.track(this.replayStart ? 'replay_started' : 'game_started', { stageId: this.stage.id });
   }
 
   private resetRunState(): void {
@@ -140,6 +163,12 @@ export class GameScene extends Phaser.Scene {
     this.nextMoveSparkAt = 0;
     this.arenaVisualPhase = -1;
     this.nextAmbientSparkAt = 0;
+    this.nextStageHazardAt = 0;
+    this.stageHazards.forEach((hazard) => {
+      hazard.zone.destroy();
+      hazard.core.destroy();
+    });
+    this.stageHazards = [];
   }
 
   update(time: number, delta: number): void {
@@ -153,41 +182,43 @@ export class GameScene extends Phaser.Scene {
     this.updatePlayer();
     this.updateSpawning(time);
     this.updateEnemies(time, deltaSeconds);
+    this.updateStageHazards(time);
     this.updateProjectiles(time);
     this.updateXpOrbs(deltaSeconds);
     this.tryAutoAttack(time);
     this.updateBoss(time);
     this.updateHud();
 
-    if (!this.bossSpawned && this.elapsedSeconds >= GAME_TIMING.bossSpawnSeconds) {
+    if (!this.bossSpawned && this.elapsedSeconds >= this.stage.bossSpawnSeconds) {
       this.spawnBoss(time);
     }
   }
 
   private createWorld(): void {
+    const theme = this.stage.visualTheme;
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.graphics = this.add.graphics().setDepth(UI_DEPTH.world);
-    this.graphics.fillStyle(COLORS.backgroundDeep, 1);
+    this.graphics.fillStyle(theme.backgroundDeep, 1);
     this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.graphics.fillStyle(COLORS.arenaBase, 0.86);
+    this.graphics.fillStyle(theme.arenaBase, 0.86);
     this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.graphics.fillStyle(COLORS.backgroundDeep, 0.38);
+    this.graphics.fillStyle(theme.backgroundDeep, 0.38);
     this.graphics.fillCircle(WORLD.width * 0.18, WORLD.height * 0.2, 520);
     this.graphics.fillCircle(WORLD.width * 0.82, WORLD.height * 0.78, 620);
-    this.graphics.lineStyle(1, COLORS.arenaGrid, 0.16);
+    this.graphics.lineStyle(1, theme.arenaGrid, 0.16);
     for (let x = 0; x <= WORLD.width; x += WORLD.tileSize) {
       this.graphics.lineBetween(x, 0, x, WORLD.height);
     }
     for (let y = 0; y <= WORLD.height; y += WORLD.tileSize) {
       this.graphics.lineBetween(0, y, WORLD.width, y);
     }
-    this.graphics.lineStyle(2, COLORS.arenaAccent, 0.24);
+    this.graphics.lineStyle(2, theme.arenaAccent, 0.24);
     for (let x = WORLD.tileSize; x <= WORLD.width; x += WORLD.tileSize * 4) {
       this.graphics.lineBetween(x, WORLD.height * 0.16, x + WORLD.height * 0.18, WORLD.height * 0.84);
     }
     const centerX = WORLD.width / 2;
     const centerY = WORLD.height / 2;
-    this.graphics.lineStyle(3, COLORS.arenaMark, 0.14);
+    this.graphics.lineStyle(3, theme.arenaMark, 0.14);
     this.graphics.strokeCircle(centerX, centerY, 260);
     this.graphics.strokeCircle(centerX, centerY, 520);
     this.graphics.lineStyle(2, COLORS.playerProjectileCore, 0.1);
@@ -199,18 +230,19 @@ export class GameScene extends Phaser.Scene {
         centerX + Math.cos(angle) * 620,
         centerY + Math.sin(angle) * 620,
       );
-      this.graphics.fillStyle(COLORS.arenaMark, 0.12);
+      this.graphics.fillStyle(theme.arenaMark, 0.12);
       this.graphics.fillCircle(centerX + Math.cos(angle) * 520, centerY + Math.sin(angle) * 520, 9);
     }
-    this.graphics.lineStyle(4, COLORS.bossShell, 0.1);
+    this.graphics.lineStyle(4, theme.bossShell, 0.1);
     this.graphics.strokeCircle(centerX, centerY, 150);
-    this.graphics.fillStyle(COLORS.arenaMark, 0.06);
+    this.graphics.fillStyle(theme.arenaMark, 0.06);
     this.graphics.fillCircle(centerX, centerY, 92);
     this.arenaFx = this.add.graphics().setDepth(UI_DEPTH.world + 1);
     this.foregroundFx = this.add.graphics().setDepth(UI_DEPTH.effects - 1);
   }
 
   private updateArenaVisuals(time: number): void {
+    const theme = this.stage.visualTheme;
     const phase = this.getArenaVisualPhase();
     if (phase !== this.arenaVisualPhase) {
       if (this.arenaVisualPhase >= 0) {
@@ -227,7 +259,7 @@ export class GameScene extends Phaser.Scene {
     const centerX = WORLD.width / 2;
     const centerY = WORLD.height / 2;
     const bossPhase = phase >= 3;
-    const color = bossPhase ? COLORS.boss : phase >= 2 ? COLORS.arenaPhase3 : phase >= 1 ? COLORS.arenaPhase2 : COLORS.arenaMark;
+    const color = bossPhase ? theme.boss : phase >= 2 ? theme.phase3 : phase >= 1 ? theme.phase2 : theme.arenaMark;
     const intensity = 0.18 + phase * 0.2 + (bossPhase ? 0.18 : 0);
     const scanOffset = (time / (34 - Math.min(phase, 2) * 6)) % WORLD.tileSize;
 
@@ -242,7 +274,7 @@ export class GameScene extends Phaser.Scene {
       this.arenaFx.strokeCircle(centerX, centerY, radius);
     }
     if (phase >= 1) {
-      this.arenaFx.lineStyle(2, COLORS.arenaPhase2, 0.09 + phase * 0.035);
+      this.arenaFx.lineStyle(2, theme.phase2, 0.09 + phase * 0.035);
       for (let i = 0; i < 7; i += 1) {
         const angle = time / 2300 + (Math.PI * 2 * i) / 7;
         this.arenaFx.lineBetween(
@@ -254,7 +286,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (phase >= 2) {
-      this.arenaFx.lineStyle(3, COLORS.arenaPhase3, 0.11 + (bossPhase ? 0.06 : 0));
+      this.arenaFx.lineStyle(3, theme.phase3, 0.11 + (bossPhase ? 0.06 : 0));
       for (let i = 0; i < 5; i += 1) {
         const angle = -time / 1900 + (Math.PI * 2 * i) / 5;
         const x = centerX + Math.cos(angle) * 520;
@@ -263,15 +295,15 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (this.boss?.active) {
-      this.arenaFx.lineStyle(4, COLORS.boss, 0.18 + Math.sin(time / 170) * 0.05);
+      this.arenaFx.lineStyle(4, theme.boss, 0.18 + Math.sin(time / 170) * 0.05);
       this.arenaFx.strokeCircle(this.boss.x, this.boss.y, 150 + Math.sin(time / 210) * 9);
-      this.arenaFx.lineStyle(2, COLORS.bossDanger, 0.2);
+      this.arenaFx.lineStyle(2, theme.bossDanger, 0.2);
       this.arenaFx.strokeCircle(this.boss.x, this.boss.y, 236 + Math.sin(time / 360) * 18);
     }
 
     this.foregroundFx.clear();
     if (phase > 0) {
-      this.foregroundFx.fillStyle(COLORS.arenaForeground, 0.05 + phase * 0.012);
+      this.foregroundFx.fillStyle(theme.foreground, 0.05 + phase * 0.012);
       const particleCount = camera.width < 700 ? 8 + phase * 2 : 12 + phase * 3;
       for (let i = 0; i < particleCount; i += 1) {
         const seed = i * 113.37;
@@ -304,7 +336,8 @@ export class GameScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const x = camera.scrollX + camera.width / 2;
     const y = camera.scrollY + camera.height / 2;
-    const color = phase >= 3 ? COLORS.boss : phase >= 2 ? COLORS.arenaPhase3 : COLORS.arenaPhase2;
+    const theme = this.stage.visualTheme;
+    const color = phase >= 3 ? theme.boss : phase >= 2 ? theme.phase3 : theme.phase2;
     const radius = Math.min(camera.width, camera.height) * 0.18;
     const ring = this.add.circle(x, y, radius, color, 0).setDepth(UI_DEPTH.effects - 2);
     ring.setStrokeStyle(4, color, phase >= 3 ? 0.46 : 0.28);
@@ -384,6 +417,11 @@ export class GameScene extends Phaser.Scene {
       this.touchInput.destroy();
       this.hud.destroy();
       this.bossBar.destroy();
+      this.stageHazards.forEach((hazard) => {
+        hazard.zone.destroy();
+        hazard.core.destroy();
+      });
+      this.stageHazards = [];
     });
   }
 
@@ -411,7 +449,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const difficulty = getDifficulty(this.elapsedSeconds, this.level);
+    const difficulty = getDifficulty(this.elapsedSeconds, this.level, this.stage);
     const bossPhase = this.bossSpawned && !this.bossDefeated;
     if (bossPhase) {
       this.nextSpawnAt = time + difficulty.spawnIntervalMs;
@@ -483,7 +521,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       const data = enemy.dataModel;
-      if (data.type === 'boss') {
+      if (data.behavior === 'boss') {
         return;
       }
 
@@ -495,8 +533,13 @@ export class GameScene extends Phaser.Scene {
       enemy.rotation = direction.angle() + Math.PI / 2;
 
       if (data.behavior === 'ranged' && time >= data.nextAttackAt && distance < 480) {
-        data.nextAttackAt = time + GAME_TIMING.rangedCooldownMs;
-        this.fireEnemyProjectile(enemy.x, enemy.y, direction.angle(), 330, data.damage);
+        if (data.type === 'pulse-caster') {
+          data.nextAttackAt = time + GAME_TIMING.rangedCooldownMs + 580;
+          this.firePulseCaster(enemy, direction.angle(), data.damage);
+        } else {
+          data.nextAttackAt = time + GAME_TIMING.rangedCooldownMs;
+          this.fireEnemyProjectile(enemy.x, enemy.y, direction.angle(), 330, data.damage);
+        }
       }
 
       if (distance < data.radius + 24 && time >= data.contactReadyAt) {
@@ -524,6 +567,11 @@ export class GameScene extends Phaser.Scene {
     distance: number,
     time: number,
   ): Phaser.Math.Vector2 {
+    if (data.type === 'orbiter') {
+      const orbit = new Phaser.Math.Vector2(-direction.y, direction.x).scale(data.speed * 0.72);
+      const pressure = distance > 210 ? direction.clone().scale(data.speed * 0.72) : direction.clone().scale(data.speed * 0.16);
+      return orbit.add(pressure);
+    }
     if (data.behavior === 'ranged') {
       if (distance < 250) {
         return direction.clone().scale(-data.speed);
@@ -536,6 +584,27 @@ export class GameScene extends Phaser.Scene {
 
     const speed = data.behavior === 'runner' ? data.speed * 1.22 : data.speed;
     return direction.clone().scale(speed);
+  }
+
+  private firePulseCaster(enemy: Enemy, angle: number, damage: number): void {
+    const color = this.stage.visualTheme.hazard;
+    const ring = this.add.circle(enemy.x, enemy.y, 30, color, 0.12).setStrokeStyle(3, color, 0.5).setDepth(UI_DEPTH.effects);
+    this.tweens.add({
+      targets: ring,
+      scale: 1.8,
+      alpha: 0,
+      duration: 360,
+      ease: 'Sine.Out',
+      onComplete: () => ring.destroy(),
+    });
+    this.time.delayedCall(260, () => {
+      if (!enemy.active || this.mode !== 'playing') {
+        return;
+      }
+      [-0.22, 0, 0.22].forEach((offset) => {
+        this.fireEnemyProjectile(enemy.x, enemy.y, angle + offset, 300, damage * 0.78);
+      });
+    });
   }
 
   private tryAutoAttack(time: number): void {
@@ -707,7 +776,7 @@ export class GameScene extends Phaser.Scene {
       this.analytics.track('elite_killed', { time: this.elapsedSeconds });
       playtestTelemetry.recordEliteKilled(this.elapsedSeconds);
     }
-    if (data.type === 'boss') {
+    if (data.behavior === 'boss') {
       this.bossDefeated = true;
       this.analytics.track('boss_defeated');
       playtestTelemetry.recordBossDefeated(this.elapsedSeconds);
@@ -727,16 +796,17 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
-    if (data.type === 'boss') {
+    if (data.behavior === 'boss') {
       this.cameras.main.shake(360, 0.012);
-      const pulse = this.add.circle(deathX, deathY, 90, COLORS.boss, 0.28).setDepth(UI_DEPTH.effects);
+      const theme = this.stage.visualTheme;
+      const pulse = this.add.circle(deathX, deathY, 90, theme.boss, 0.28).setDepth(UI_DEPTH.effects);
       pulse.setStrokeStyle(4, 0xffffff, 0.72);
       this.tweens.add({ targets: pulse, scale: 2.1, alpha: 0, duration: 520, ease: 'Sine.Out', onComplete: () => pulse.destroy() });
-      const overload = this.add.circle(deathX, deathY, 48, COLORS.bossDanger, 0.18).setDepth(UI_DEPTH.effects);
-      overload.setStrokeStyle(5, COLORS.bossDanger, 0.5);
+      const overload = this.add.circle(deathX, deathY, 48, theme.bossDanger, 0.18).setDepth(UI_DEPTH.effects);
+      overload.setStrokeStyle(5, theme.bossDanger, 0.5);
       this.tweens.add({ targets: overload, scale: 4.6, alpha: 0, duration: 760, ease: 'Sine.Out', onComplete: () => overload.destroy() });
-      this.createBurst(deathX, deathY, COLORS.boss, 18, 'gold-spark');
-      this.createBurst(deathX, deathY, COLORS.bossDanger, 12, 'danger-spark');
+      this.createBurst(deathX, deathY, theme.boss, 18, 'gold-spark');
+      this.createBurst(deathX, deathY, theme.bossDanger, 12, 'danger-spark');
       this.finishRun(true);
     }
   }
@@ -915,6 +985,93 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private updateStageHazards(time: number): void {
+    const hazardConfig = this.stage.hazard;
+    if (!hazardConfig.enabled || this.elapsedSeconds < hazardConfig.startSeconds || this.bossDefeated) {
+      return;
+    }
+
+    if (this.nextStageHazardAt === 0) {
+      this.nextStageHazardAt = time + hazardConfig.baseIntervalMs;
+    }
+
+    if (time >= this.nextStageHazardAt && this.stageHazards.length < 3) {
+      const interval = this.elapsedSeconds >= 65 ? hazardConfig.lateIntervalMs : hazardConfig.baseIntervalMs;
+      this.nextStageHazardAt = time + interval;
+      this.spawnStageHazard(time);
+    }
+
+    this.stageHazards = this.stageHazards.filter((hazard) => {
+      const active = time >= hazard.activeAt;
+      if (active && !hazard.damageApplied) {
+        hazard.zone.setFillStyle(this.stage.visualTheme.hazard, 0.18);
+        hazard.core.setAlpha(0.5);
+        if (Phaser.Math.Distance.Squared(hazard.x, hazard.y, this.player.x, this.player.y) <= hazard.radius * hazard.radius) {
+          hazard.damageApplied = true;
+          this.damagePlayer(hazardConfig.damage);
+          this.createBurst(this.player.x, this.player.y, this.stage.visualTheme.hazard, 5, 'danger-spark');
+        }
+      }
+      if (time >= hazard.expiresAt) {
+        hazard.zone.destroy();
+        hazard.core.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  private spawnStageHazard(time: number): void {
+    const config = this.stage.hazard;
+    const point = this.pickHazardPoint();
+    const zone = this.add.circle(point.x, point.y, config.radius, this.stage.visualTheme.hazard, 0.06);
+    zone.setStrokeStyle(3, this.stage.visualTheme.hazard, 0.58).setDepth(UI_DEPTH.effects - 1);
+    const core = this.add.circle(point.x, point.y, Math.max(22, config.radius * 0.18), this.stage.visualTheme.bossDanger, 0.22);
+    core.setStrokeStyle(2, 0xffffff, 0.4).setDepth(UI_DEPTH.effects);
+    this.tweens.add({
+      targets: zone,
+      scale: { from: 0.18, to: 1 },
+      alpha: { from: 0.9, to: 0.72 },
+      duration: config.telegraphMs,
+      ease: 'Sine.Out',
+    });
+    this.tweens.add({
+      targets: core,
+      scale: 2.8,
+      alpha: 0,
+      duration: config.telegraphMs + config.activeMs,
+      ease: 'Sine.Out',
+      onComplete: () => core.destroy(),
+    });
+    this.stageHazards.push({
+      zone,
+      core,
+      x: point.x,
+      y: point.y,
+      radius: config.radius,
+      activeAt: time + config.telegraphMs,
+      expiresAt: time + config.telegraphMs + config.activeMs,
+      damageApplied: false,
+    });
+  }
+
+  private pickHazardPoint(): Phaser.Math.Vector2 {
+    const camera = this.cameras.main;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const distance = Phaser.Math.Between(180, 520);
+      const x = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * distance, camera.scrollX + 90, camera.scrollX + camera.width - 90);
+      const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, camera.scrollY + 90, camera.scrollY + camera.height - 90);
+      if (Phaser.Math.Distance.Squared(x, y, this.player.x, this.player.y) >= 160 * 160) {
+        return new Phaser.Math.Vector2(Phaser.Math.Clamp(x, 80, WORLD.width - 80), Phaser.Math.Clamp(y, 80, WORLD.height - 80));
+      }
+    }
+    return new Phaser.Math.Vector2(
+      Phaser.Math.Clamp(this.player.x + 220, 80, WORLD.width - 80),
+      Phaser.Math.Clamp(this.player.y, 80, WORLD.height - 80),
+    );
+  }
+
   private spawnBoss(_time: number): void {
     this.bossSpawned = true;
     this.clearArenaForBossEntrance();
@@ -933,11 +1090,18 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const spawn = this.pickBossEntrancePoint();
-    this.boss = new Enemy(this, spawn.x, spawn.y, ENEMY_DEFINITIONS.boss, false, 1);
+    const baseDefinition = ENEMY_DEFINITIONS[this.stage.boss.type];
+    const bossDefinition: EnemyDefinition = {
+      ...baseDefinition,
+      name: this.stage.boss.name,
+      health: baseDefinition.health * this.stage.boss.healthMultiplier,
+      speed: baseDefinition.speed * this.stage.boss.speedMultiplier,
+    };
+    this.boss = new Enemy(this, spawn.x, spawn.y, bossDefinition, false, 1);
     this.enemies.add(this.boss);
     this.boss.setAlpha(0.15).setScale(0.82);
     this.tweens.add({ targets: this.boss, alpha: 1, scale: 1, duration: 260, ease: 'Back.Out' });
-    this.createSpawnFlash(this.boss.x, this.boss.y, COLORS.boss, 92);
+    this.createSpawnFlash(this.boss.x, this.boss.y, this.stage.visualTheme.boss, 92);
     this.createBossMaterialization(this.boss.x, this.boss.y);
     this.bossBar.show();
     this.nextBossChargeAt = time + 2500;
@@ -964,10 +1128,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clearArenaForBossEntrance(): void {
-    this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + BOSS_BALANCE.entryHeal);
+    this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + this.stage.boss.entryHeal);
     this.enemies.getChildren().forEach((gameObject) => {
       const enemy = gameObject as Enemy;
-      if (enemy.active && enemy.dataModel.type !== 'boss') {
+      if (enemy.active && enemy.dataModel.behavior !== 'boss') {
         this.createBurst(enemy.x, enemy.y, 0xfff5a8);
         enemy.destroy();
       }
@@ -981,11 +1145,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createBossEntranceShockwave(): void {
+    const theme = this.stage.visualTheme;
     const camera = this.cameras.main;
     const x = camera.scrollX + camera.width / 2;
     const y = camera.scrollY + camera.height / 2;
-    const ring = this.add.circle(x, y, Math.min(camera.width, camera.height) * 0.2, COLORS.boss, 0.08).setDepth(UI_DEPTH.effects - 2);
-    ring.setStrokeStyle(5, COLORS.boss, 0.42);
+    const ring = this.add.circle(x, y, Math.min(camera.width, camera.height) * 0.2, theme.boss, 0.08).setDepth(UI_DEPTH.effects - 2);
+    ring.setStrokeStyle(5, theme.boss, 0.42);
     this.tweens.add({
       targets: ring,
       scale: 5.4,
@@ -997,9 +1162,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createBossMaterialization(x: number, y: number): void {
+    const theme = this.stage.visualTheme;
     for (let index = 0; index < 3; index += 1) {
-      const ring = this.add.circle(x, y, 48 + index * 28, COLORS.boss, 0.06).setDepth(UI_DEPTH.effects);
-      ring.setStrokeStyle(3, index === 1 ? COLORS.bossDanger : COLORS.boss, 0.34 - index * 0.06);
+      const ring = this.add.circle(x, y, 48 + index * 28, theme.boss, 0.06).setDepth(UI_DEPTH.effects);
+      ring.setStrokeStyle(3, index === 1 ? theme.bossDanger : theme.boss, 0.34 - index * 0.06);
       this.tweens.add({
         targets: ring,
         scale: 1.9 + index * 0.48,
@@ -1068,13 +1234,14 @@ export class GameScene extends Phaser.Scene {
     this.bossRecoverUntil = time + 1600;
     this.nextBossChargeAt = time + GAME_TIMING.bossChargeCooldownMs;
     this.bossTelegraph?.destroy();
-    const line = this.add.rectangle(this.boss.x, this.boss.y, 460, 44, COLORS.bossDanger, 0.22).setDepth(UI_DEPTH.effects);
-    line.setStrokeStyle(2, COLORS.bossDanger, 0.5);
+    const theme = this.stage.visualTheme;
+    const line = this.add.rectangle(this.boss.x, this.boss.y, 460, 44, theme.bossDanger, 0.22).setDepth(UI_DEPTH.effects);
+    line.setStrokeStyle(2, theme.bossDanger, 0.5);
     line.rotation = direction.angle();
     this.bossTelegraph = line;
     this.tweens.add({ targets: line, alpha: 0, duration: 620, onComplete: () => line.destroy() });
-    const core = this.add.circle(this.boss.x, this.boss.y, 46, COLORS.bossDanger, 0.16).setDepth(UI_DEPTH.effects);
-    core.setStrokeStyle(3, COLORS.boss, 0.45);
+    const core = this.add.circle(this.boss.x, this.boss.y, 46, theme.bossDanger, 0.16).setDepth(UI_DEPTH.effects);
+    core.setStrokeStyle(3, theme.boss, 0.45);
     this.tweens.add({ targets: core, scale: 1.55, alpha: 0, duration: 620, ease: 'Sine.Out', onComplete: () => core.destroy() });
   }
 
@@ -1087,10 +1254,11 @@ export class GameScene extends Phaser.Scene {
     this.boss.dataModel.telegraphUntil = this.bossRadialTelegraphUntil;
     this.bossRecoverUntil = time + 980;
     this.nextBossRadialAt = time + GAME_TIMING.bossRadialCooldownMs;
-    const ring = this.add.circle(this.boss.x, this.boss.y, 72, COLORS.boss, 0.12).setStrokeStyle(5, COLORS.boss, 0.7);
+    const theme = this.stage.visualTheme;
+    const ring = this.add.circle(this.boss.x, this.boss.y, 72, theme.boss, 0.12).setStrokeStyle(5, theme.boss, 0.7);
     ring.setDepth(UI_DEPTH.effects);
     this.bossRadialRing = ring;
-    const warning = this.add.circle(this.boss.x, this.boss.y, 38, COLORS.bossDanger, 0.1).setStrokeStyle(3, COLORS.bossDanger, 0.42);
+    const warning = this.add.circle(this.boss.x, this.boss.y, 38, theme.bossDanger, 0.1).setStrokeStyle(3, theme.bossDanger, 0.42);
     warning.setDepth(UI_DEPTH.effects);
     this.tweens.add({
       targets: ring,
@@ -1122,10 +1290,15 @@ export class GameScene extends Phaser.Scene {
     if (!this.boss) {
       return;
     }
-    const projectileCount = 12;
+    const riftBoss = this.boss.dataModel.type === 'rift-boss';
+    const projectileCount = riftBoss ? 14 : 12;
+    const offset = riftBoss ? this.time.now / 800 : 0;
     for (let i = 0; i < projectileCount; i += 1) {
-      const angle = (Math.PI * 2 * i) / projectileCount;
-      this.fireEnemyProjectile(this.boss.x, this.boss.y, angle, 245, this.boss.dataModel.damage * 0.72);
+      const angle = offset + (Math.PI * 2 * i) / projectileCount;
+      this.fireEnemyProjectile(this.boss.x, this.boss.y, angle, riftBoss ? 270 : 245, this.boss.dataModel.damage * (riftBoss ? 0.64 : 0.72));
+    }
+    if (riftBoss && this.stage.hazard.enabled) {
+      this.spawnStageHazard(this.time.now);
     }
   }
 
@@ -1151,7 +1324,7 @@ export class GameScene extends Phaser.Scene {
 
   private createHitImpact(enemy: Enemy, critical: boolean): void {
     const data = enemy.dataModel;
-    const major = critical || data.elite || data.type === 'boss';
+    const major = critical || data.elite || data.behavior === 'boss';
     if (!major && Math.random() > 0.38) {
       return;
     }
@@ -1182,7 +1355,10 @@ export class GameScene extends Phaser.Scene {
       return COLORS.elite;
     }
     if (type === 'boss') {
-      return COLORS.boss;
+      return this.stage.visualTheme.boss;
+    }
+    if (type === 'rift-boss') {
+      return this.stage.visualTheme.boss;
     }
     return ENEMY_DEFINITIONS[type].tint;
   }
@@ -1278,11 +1454,12 @@ export class GameScene extends Phaser.Scene {
     const shortLandscape = this.scale.width > this.scale.height && this.scale.height < 520;
     const width = Math.min(this.scale.width - 48, 480);
     const y = shortLandscape ? this.scale.height * 0.52 : Math.min(this.scale.height * 0.32, 230);
-    const banner = this.add.rectangle(this.scale.width / 2, y, width, shortLandscape ? 38 : 48, COLORS.bossDanger, 0.2);
-    banner.setStrokeStyle(2, COLORS.boss, 0.5);
+    const theme = this.stage.visualTheme;
+    const banner = this.add.rectangle(this.scale.width / 2, y, width, shortLandscape ? 38 : 48, theme.bossDanger, 0.2);
+    banner.setStrokeStyle(2, theme.boss, 0.5);
     const text = this.add
       .text(this.scale.width / 2, y, 'BOSS INCOMING', {
-        color: '#fff5a8',
+        color: this.stage.id === 'stage-2' ? '#f9e8ff' : '#fff5a8',
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.scale.width < 520 || shortLandscape ? '18px' : '24px',
         fontStyle: '900',
@@ -1317,8 +1494,9 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.pause();
     this.audio.play(victory ? 'victory' : 'gameOver');
     this.analytics.track(victory ? 'victory' : 'game_over');
-    const finalScore = this.score + calculateScoreBonus(this.elapsedSeconds, this.kills, this.eliteKills);
+    const finalScore = this.score + calculateScoreBonus(this.elapsedSeconds, this.kills, this.eliteKills) + (victory ? this.stage.boss.scoreBonus : 0);
     const result: RunResult = {
+      stageId: this.stage.id,
       victory,
       score: finalScore,
       kills: this.kills,

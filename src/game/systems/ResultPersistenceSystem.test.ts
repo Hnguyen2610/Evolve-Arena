@@ -4,6 +4,7 @@ import type { RunResult } from '../types';
 import { persistResultAndMaybeSendScore } from './ResultPersistenceSystem';
 
 const baseResult: RunResult = {
+  stageId: 'stage-1',
   victory: false,
   score: 1000,
   kills: 20,
@@ -70,5 +71,29 @@ describe('persistResultAndMaybeSendScore', () => {
     expect(outcome.persisted).toBe(true);
     expect(outcome.scoreSubmitted).toBe(false);
     expect(outcome.save.coins).toBe(baseResult.coinsEarned);
+  });
+
+  it('unlocks stage 2 after a stage 1 victory', async () => {
+    const outcome = await persistResultAndMaybeSendScore(cloneDefaultSave(), { ...baseResult, victory: true, bossDefeated: true }, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+
+    expect(outcome.newlyUnlockedStageId).toBe('stage-2');
+    expect(outcome.save.clearedStageIds).toEqual(['stage-1']);
+    expect(outcome.save.unlockedStageIds).toEqual(['stage-1', 'stage-2']);
+  });
+
+  it('does not unlock another stage after a defeat', async () => {
+    const outcome = await persistResultAndMaybeSendScore(cloneDefaultSave(), baseResult, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+
+    expect(outcome.newlyUnlockedStageId).toBeNull();
+    expect(outcome.save.clearedStageIds).toEqual([]);
+    expect(outcome.save.unlockedStageIds).toEqual(['stage-1']);
   });
 });

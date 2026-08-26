@@ -1,4 +1,5 @@
-import type { EnemyType } from '../types';
+import { getStageDefinition } from '../data/stages';
+import type { EnemyType, StageDefinition, StageId } from '../types';
 
 export interface DifficultySnapshot {
   spawnIntervalMs: number;
@@ -8,29 +9,24 @@ export interface DifficultySnapshot {
   swarmPackSize: number;
 }
 
-export function getDifficulty(elapsedSeconds: number, playerLevel: number): DifficultySnapshot {
+export function getDifficulty(
+  elapsedSeconds: number,
+  playerLevel: number,
+  stage: StageDefinition | StageId = 'stage-1',
+): DifficultySnapshot {
+  const definition = typeof stage === 'string' ? getStageDefinition(stage) : stage;
   const t = Math.max(0, elapsedSeconds);
   const levelPressure = Math.min(10, playerLevel) * 0.012;
 
-  const enemyTypes: EnemyType[] = ['basic'];
-  if (t >= 10) {
-    enemyTypes.push('runner');
-  }
-  if (t >= 25) {
-    enemyTypes.push('tank');
-  }
-  if (t >= 42) {
-    enemyTypes.push('ranged');
-  }
-  if (t >= 58) {
-    enemyTypes.push('swarm');
-  }
+  const enemyTypes = definition.enemyUnlocks
+    .filter((unlock) => t >= unlock.atSeconds)
+    .flatMap((unlock) => unlock.types);
 
   return {
-    spawnIntervalMs: Math.max(520, 1650 - t * 3.6 - playerLevel * 5),
-    maxEnemies: Math.min(52, 7 + Math.floor(t / 8) + playerLevel),
-    enemyTypes,
-    eliteChance: t < 70 ? 0 : Math.min(0.2, 0.04 + (t - 70) * 0.003 + levelPressure),
+    spawnIntervalMs: Math.max(520, (1650 - t * 3.6 - playerLevel * 5) * definition.spawnIntervalMultiplier),
+    maxEnemies: Math.min(56, 7 + Math.floor(t / 8) + playerLevel + definition.maxEnemyBonus),
+    enemyTypes: enemyTypes.length > 0 ? enemyTypes : ['basic'],
+    eliteChance: t < 70 ? 0 : Math.min(0.24, 0.04 + (t - 70) * 0.003 + levelPressure + definition.eliteChanceBonus),
     swarmPackSize: t >= 58 ? Math.min(8, 3 + Math.floor((t - 58) / 12)) : 1,
   };
 }

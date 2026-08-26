@@ -14,7 +14,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private readonly fxShadow: Phaser.FX.Shadow | null;
 
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
-    super(scene, x, y, definition.type === 'boss' ? 'boss' : `enemy-${definition.type}`);
+    const bossType = definition.behavior === 'boss';
+    super(scene, x, y, bossType ? definition.type : `enemy-${definition.type}`);
     const healthScale = elite ? 2.8 : 1;
     const damageScale = elite ? 1.45 : 1;
     this.dataModel = {
@@ -35,18 +36,18 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     };
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setDepth(definition.type === 'boss' ? 9 : 8);
+    this.setDepth(bossType ? 9 : 8);
     this.setTint(elite ? 0xffffff : definition.tint);
     this.setScale(elite ? 1.28 : 1);
     this.baseDisplayScale = elite ? 1.28 : 1;
     this.shadow = scene.add
-      .ellipse(x, y + definition.radius * 0.58, definition.radius * (elite ? 2.25 : 1.85), definition.radius * 0.72, definition.type === 'boss' ? COLORS.boss : definition.tint, definition.type === 'boss' ? 0.18 : 0.12)
+      .ellipse(x, y + definition.radius * 0.58, definition.radius * (elite ? 2.25 : 1.85), definition.radius * 0.72, definition.tint, bossType ? 0.18 : 0.12)
       .setDepth(6);
-    if (definition.type === 'boss') {
-      this.glow = scene.add.image(x, y, 'boss-glow').setDepth(7).setAlpha(0.42);
-      this.bossRing = scene.add.image(x, y, 'boss-ring').setDepth(8).setAlpha(0.9);
-      this.fxGlow = addGlowFx(scene, this, COLORS.boss, 1.4, 0.18);
-      this.fxShadow = addShadowFx(scene, this, COLORS.boss, 0.24);
+    if (bossType) {
+      this.glow = scene.add.image(x, y, definition.type === 'rift-boss' ? 'rift-boss-glow' : 'boss-glow').setDepth(7).setAlpha(0.42);
+      this.bossRing = scene.add.image(x, y, definition.type === 'rift-boss' ? 'rift-boss-ring' : 'boss-ring').setDepth(8).setAlpha(0.9);
+      this.fxGlow = addGlowFx(scene, this, definition.tint, 1.4, 0.18);
+      this.fxShadow = addShadowFx(scene, this, definition.tint, 0.24);
     } else if (elite) {
       this.eliteRing = scene.add.image(x, y, 'elite-ring').setDepth(7).setAlpha(0.92).setScale(0.78);
       this.fxGlow = addGlowFx(scene, this, COLORS.elite, 0.72, 0.06);
@@ -64,7 +65,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.updateBodyMotion(time);
     this.shadow
       .setPosition(this.x, this.y + this.dataModel.radius * 0.58)
-      .setScale(this.scaleX * (this.dataModel.type === 'boss' ? 1.18 : 1), Math.max(0.75, this.scaleY))
+        .setScale(this.isBossType() ? this.scaleX * 1.18 : this.scaleX, Math.max(0.75, this.scaleY))
       .setVisible(this.active);
     if (this.eliteRing) {
       this.eliteRing
@@ -107,7 +108,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   private updateBodyMotion(time: number): void {
     const data = this.dataModel;
-    if (data.type === 'boss') {
+    if (this.isBossType()) {
       const healthRatio = Phaser.Math.Clamp(data.health / data.maxHealth, 0, 1);
       const instability = 1 - healthRatio;
       const charging = data.telegraphUntil > time || data.chargeUntil > time;
@@ -133,6 +134,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     } else {
       this.setScale(this.baseDisplayScale * (1 + Math.sin(phase * 2.4) * 0.024));
     }
+  }
+
+  private isBossType(): boolean {
+    return this.dataModel.behavior === 'boss';
   }
 
   disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {

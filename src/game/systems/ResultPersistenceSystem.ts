@@ -1,4 +1,5 @@
-import type { GameSaveData, RunResult } from '../types';
+import type { GameSaveData, RunResult, StageId } from '../types';
+import { markStageCleared } from './StageProgressionSystem';
 
 interface ResultPersistenceDependencies {
   save(data: GameSaveData): Promise<boolean>;
@@ -11,6 +12,7 @@ export interface ResultPersistenceOutcome {
   newBest: boolean;
   persisted: boolean;
   scoreSubmitted: boolean;
+  newlyUnlockedStageId: StageId | null;
 }
 
 export async function persistResultAndMaybeSendScore(
@@ -19,11 +21,13 @@ export async function persistResultAndMaybeSendScore(
   dependencies: ResultPersistenceDependencies,
 ): Promise<ResultPersistenceOutcome> {
   const newBest = result.score > save.bestScore;
-  const nextSave: GameSaveData = {
+  const scoredSave: GameSaveData = {
     ...save,
     bestScore: Math.max(save.bestScore, result.score),
     coins: save.coins + result.coinsEarned,
   };
+  const stageProgression = result.victory ? markStageCleared(scoredSave, result.stageId) : { save: scoredSave, newlyUnlockedStageId: null };
+  const nextSave = stageProgression.save;
 
   if (newBest) {
     dependencies.markPendingBestScore(nextSave.bestScore);
@@ -36,5 +40,6 @@ export async function persistResultAndMaybeSendScore(
     newBest,
     persisted,
     scoreSubmitted,
+    newlyUnlockedStageId: stageProgression.newlyUnlockedStageId,
   };
 }

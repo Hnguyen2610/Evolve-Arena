@@ -1,6 +1,8 @@
 export type GameMode = 'menu' | 'playing' | 'level-up' | 'paused' | 'game-over' | 'victory';
 
-export type EnemyType = 'basic' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'boss';
+export type StageId = 'stage-1' | 'stage-2';
+
+export type EnemyType = 'basic' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'orbiter' | 'pulse-caster' | 'boss' | 'rift-boss';
 
 export type UpgradeRarity = 'common' | 'rare' | 'epic';
 
@@ -97,9 +99,12 @@ export interface GameSaveData {
   bestScore: number;
   coins: number;
   permanentUpgrades: PermanentUpgradeState;
+  unlockedStageIds: StageId[];
+  clearedStageIds: StageId[];
 }
 
 export interface RunResult {
+  stageId: StageId;
   victory: boolean;
   score: number;
   kills: number;
@@ -108,4 +113,57 @@ export interface RunResult {
   survivalSeconds: number;
   coinsEarned: number;
   playerLevel: number;
+}
+
+export interface StageVisualTheme {
+  backgroundDeep: number;
+  arenaBase: number;
+  arenaGrid: number;
+  arenaAccent: number;
+  arenaMark: number;
+  phase2: number;
+  phase3: number;
+  foreground: number;
+  boss: number;
+  bossShell: number;
+  bossDanger: number;
+  hazard: number;
+}
+
+export interface StageHazardConfig {
+  enabled: boolean;
+  startSeconds: number;
+  baseIntervalMs: number;
+  lateIntervalMs: number;
+  telegraphMs: number;
+  activeMs: number;
+  radius: number;
+  damage: number;
+}
+
+export interface StageBossConfig {
+  type: EnemyType;
+  name: string;
+  healthMultiplier: number;
+  speedMultiplier: number;
+  entryHeal: number;
+  scoreBonus: number;
+}
+
+export interface StageDefinition {
+  id: StageId;
+  number: number;
+  name: string;
+  subtitle: string;
+  description: string;
+  bossName: string;
+  unlocksOnClear?: StageId;
+  visualTheme: StageVisualTheme;
+  bossSpawnSeconds: number;
+  spawnIntervalMultiplier: number;
+  maxEnemyBonus: number;
+  eliteChanceBonus: number;
+  enemyUnlocks: Array<{ atSeconds: number; types: EnemyType[] }>;
+  boss: StageBossConfig;
+  hazard: StageHazardConfig;
 }

@@ -1,5 +1,6 @@
 import type { GameSaveData } from '../types';
 import { SAVE_VERSION } from '../config/constants';
+import { DEFAULT_STAGE_ID } from './stages';
 
 export const DEFAULT_SAVE_DATA: GameSaveData = {
   version: SAVE_VERSION,
@@ -10,4 +11,6 @@ export const DEFAULT_SAVE_DATA: GameSaveData = {
     health: 0,
     speed: 0,
   },
+  unlockedStageIds: [DEFAULT_STAGE_ID],
+  clearedStageIds: [],
 };

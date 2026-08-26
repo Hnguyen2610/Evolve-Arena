@@ -1,4 +1,5 @@
-import type { RunResult } from '../types';
+import { DEFAULT_STAGE_ID } from '../data/stages';
+import type { RunResult, StageId } from '../types';
 
 export type PlaytestEventName =
   | 'game_started'
@@ -28,6 +29,7 @@ export interface PlaytestEvent {
 
 export interface PlaytestRunTelemetry {
   runId: string;
+  stageId: StageId;
   startTimestamp: number;
   endTimestamp: number | null;
   durationSeconds: number;
@@ -111,7 +113,7 @@ export class PlaytestTelemetryService {
     }
   }
 
-  beginRun(source: 'new' | 'replay' = 'new'): void {
+  beginRun(source: 'new' | 'replay' = 'new', stageId: StageId = DEFAULT_STAGE_ID): void {
     if (!this.options.enabled) {
       return;
     }
@@ -124,6 +126,7 @@ export class PlaytestTelemetryService {
 
     this.currentRun = {
       runId: `run-${this.runCounter}`,
+      stageId,
       startTimestamp: this.now(),
       endTimestamp: null,
       durationSeconds: 0,

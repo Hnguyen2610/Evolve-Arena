@@ -1,0 +1,17 @@
+import { describe, expect, it } from 'vitest';
+import { getDifficulty } from './DifficultySystem';
+
+describe('DifficultySystem', () => {
+  it('preserves the stage 1 enemy unlock curve', () => {
+    expect(getDifficulty(0, 1, 'stage-1').enemyTypes).toEqual(['basic']);
+    expect(getDifficulty(10, 1, 'stage-1').enemyTypes).toEqual(['basic', 'runner']);
+    expect(getDifficulty(42, 1, 'stage-1').enemyTypes).toEqual(['basic', 'runner', 'tank', 'ranged']);
+    expect(getDifficulty(58, 1, 'stage-1').enemyTypes).toEqual(['basic', 'runner', 'tank', 'ranged', 'swarm']);
+  });
+
+  it('introduces stage 2 enemies without changing the default stage', () => {
+    expect(getDifficulty(32, 1, 'stage-2').enemyTypes).toContain('orbiter');
+    expect(getDifficulty(65, 1, 'stage-2').enemyTypes).toContain('pulse-caster');
+    expect(getDifficulty(65, 1).enemyTypes).not.toContain('pulse-caster');
+  });
+});

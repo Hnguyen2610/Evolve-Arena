@@ -1,10 +1,10 @@
 # Evolve Arena
 
-Evolve Arena is a Phaser 3 hybrid-casual survival action game: move, auto-attack, collect XP, choose upgrades, build synergies, defeat the Apex Core, earn coins, and replay.
+Evolve Arena is a Phaser 3 hybrid-casual survival action game: move, auto-attack, collect XP, choose upgrades, build synergies, clear stages, earn coins, and replay.
 
 ## Gameplay Loop
 
-Move through the arena, survive enemy waves, collect XP orbs, level up, choose one of three upgrades, fight elites, defeat the boss, and spend earned coins on permanent upgrades.
+Move through the arena, survive enemy waves, collect XP orbs, level up, choose one of three upgrades, fight elites, defeat the stage boss, and spend earned coins on permanent upgrades.
 
 ## Stack
 
@@ -50,11 +50,13 @@ npm run audit:playables
 
 ## Implemented MVP Features
 
-- One large arena
+- Stage Select with Stage 1 available by default and Stage 2 unlocked by clearing Stage 1
+- Stage 1: Neon Core arena with the original Apex Core boss encounter
+- Stage 2: Rift Nexus arena with rift hazards, Orbiter enemies, Pulse Casters, and the Prism Warden boss
 - One playable character
-- Five standard enemy types: Basic, Runner, Tank, Ranged, Swarm
+- Seven standard enemy types: Basic, Runner, Tank, Ranged, Swarm, Orbiter, Pulse Caster
 - Elite enemy variants
-- Boss encounter with charge and radial projectile patterns
+- Stage-aware boss encounters with charge, radial projectile, and rift pressure patterns
 - Auto-targeting projectile combat
 - Player health, armor mitigation, enemy contact damage, and enemy projectiles
 - XP drops, XP magnet attraction, level progression, and upgrade selection
@@ -67,7 +69,7 @@ npm run audit:playables
 ## Architecture Overview
 
 - `src/game/config`: central balance, constants, Phaser config
-- `src/game/data`: enemy, upgrade, and save defaults
+- `src/game/data`: stage, enemy, upgrade, and save defaults
 - `src/game/entities`: Phaser entity wrappers
 - `src/game/input`: desktop and touch input
 - `src/game/scenes`: boot, menu, gameplay, results
@@ -84,6 +86,7 @@ Persisted data:
 - Best score
 - Coins
 - Permanent upgrade levels
+- Unlocked and cleared stage IDs
 
 ## YouTube Playables Readiness
 

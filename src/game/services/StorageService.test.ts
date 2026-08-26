@@ -13,6 +13,27 @@ describe('StorageService', () => {
     expect(save.coins).toBe(15);
     expect(save.permanentUpgrades.damage).toBe(2);
     expect(save.permanentUpgrades.health).toBe(0);
+    expect(save.unlockedStageIds).toEqual(['stage-1']);
+    expect(save.clearedStageIds).toEqual([]);
+  });
+
+  it('normalizes persisted stage progress', () => {
+    const save = parseSaveData(JSON.stringify({
+      unlockedStageIds: ['stage-2', 'missing', 'stage-1'],
+      clearedStageIds: ['stage-1', 'missing'],
+    }));
+
+    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2']);
+    expect(save.clearedStageIds).toEqual(['stage-1']);
+  });
+
+  it('clones default stage arrays independently', () => {
+    const first = cloneDefaultSave();
+    const second = cloneDefaultSave();
+
+    first.unlockedStageIds.push('stage-2');
+
+    expect(second.unlockedStageIds).toEqual(['stage-1']);
   });
 
   it('clamps permanent upgrade levels to supported maximums', () => {

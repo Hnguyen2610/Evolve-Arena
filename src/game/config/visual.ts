@@ -51,6 +51,8 @@ export const ENEMY_COLORS = {
   tank: { fill: 0x8068ff, core: 0xdcd4ff, stroke: 0x211a4c },
   ranged: { fill: 0x39d2a2, core: 0xd6fff4, stroke: 0x123d34 },
   swarm: { fill: 0xff75ca, core: 0xffd4ef, stroke: 0x4a1939 },
+  orbiter: { fill: 0x8f6dff, core: 0xf3e8ff, stroke: 0x24134f },
+  'pulse-caster': { fill: 0xff4fd8, core: 0xffd7f6, stroke: 0x4a123f },
 };
 
 export const RARITY_COLORS: Record<UpgradeRarity, {

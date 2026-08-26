@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
+import { getStageDefinition } from '../data/stages';
 import { gameStorage, platform } from '../services/PlatformServices';
 import { markPendingBestScore, setLatestSaveSnapshot, synchronizePendingBestScore } from '../services/PersistenceCoordinator';
 import { saveBestEffort } from '../services/StorageService';
@@ -39,6 +40,7 @@ export class ResultScene extends Phaser.Scene {
     const newBest = persistence.newBest;
     this.save = persistence.save;
     setLatestSaveSnapshot(this.save);
+    const stage = getStageDefinition(this.result.stageId);
 
     const { width, height } = this.scale;
     const centerX = width / 2;
@@ -68,9 +70,19 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3);
 
+    this.add
+      .text(centerX, panelY - panelHeight * 0.28, stage.name.toUpperCase(), {
+        color: '#dfe9ff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '13px' : '15px',
+        fontStyle: '900',
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+
     if (newBest) {
       this.add
-        .text(centerX, panelY - panelHeight * 0.24, 'NEW BEST!', {
+        .text(centerX, panelY - panelHeight * 0.2, 'NEW BEST!', {
           color: '#9ff7db',
           fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '15px' : '17px',
@@ -116,21 +128,35 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3);
 
+    if (persistence.newlyUnlockedStageId) {
+      const unlocked = getStageDefinition(persistence.newlyUnlockedStageId);
+      this.add
+        .text(centerX, scoreY + (shortLandscape ? 86 : 106), `${unlocked.name.toUpperCase()} UNLOCKED`, {
+          color: '#9ff7db',
+          fontFamily: 'Arial, Helvetica, sans-serif',
+          fontSize: shortLandscape ? '12px' : '14px',
+          fontStyle: '900',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setDepth(3);
+    }
+
     if (shortLandscape) {
       const buttonWidth = Math.min(250, width * 0.32);
       const buttonY = panelY + panelHeight * 0.35;
       this.createButton(centerX - buttonWidth * 0.58, buttonY, buttonWidth, 50, 'PLAY AGAIN', () => {
-        this.scene.start('GameScene', { save: this.save, replay: true });
+        this.scene.start('GameScene', { save: this.save, replay: true, stageId: this.result.stageId });
       });
-      this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'UPGRADES', () => {
-        this.scene.start('MenuScene', { save: this.save });
+      this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'STAGES', () => {
+        this.scene.start('StageSelectScene', { save: this.save });
       }, false);
     } else {
       this.createButton(centerX, panelY + panelHeight * 0.26, Math.min(320, panelWidth - 48), 60, 'PLAY AGAIN', () => {
-        this.scene.start('GameScene', { save: this.save, replay: true });
+        this.scene.start('GameScene', { save: this.save, replay: true, stageId: this.result.stageId });
       });
-      this.createButton(centerX, panelY + panelHeight * 0.4, Math.min(320, panelWidth - 48), 52, 'UPGRADES', () => {
-        this.scene.start('MenuScene', { save: this.save });
+      this.createButton(centerX, panelY + panelHeight * 0.4, Math.min(320, panelWidth - 48), 52, 'STAGES', () => {
+        this.scene.start('StageSelectScene', { save: this.save });
       }, false);
     }
   }

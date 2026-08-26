@@ -87,7 +87,7 @@ export class MenuScene extends Phaser.Scene {
     );
 
     const playButton = this.createButton(centerX, startY + 118, Math.min(340, width - 42), 64, 'PLAY', () => {
-      this.scene.start('GameScene', { save: this.save });
+      this.scene.start('StageSelectScene', { save: this.save });
     });
     this.addNode(playButton);
 
@@ -157,7 +157,7 @@ export class MenuScene extends Phaser.Scene {
     );
     this.addNode(
       this.createButton(leftX, 150, Math.min(260, width * 0.32), 54, 'PLAY', () => {
-        this.scene.start('GameScene', { save: this.save });
+        this.scene.start('StageSelectScene', { save: this.save });
       }),
     );
     this.addNode(

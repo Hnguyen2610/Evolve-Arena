@@ -1,8 +1,9 @@
 import { SAVE_KEY, SAVE_VERSION } from '../config/constants';
 import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
 import { DEFAULT_SAVE_DATA } from '../data/progression';
+import { DEFAULT_STAGE_ID, STAGE_IDS } from '../data/stages';
 import { youtubePlayables, type YouTubePlayablesService } from './YouTubePlayablesService';
-import type { GameSaveData, PermanentUpgradeId, PermanentUpgradeState } from '../types';
+import type { GameSaveData, PermanentUpgradeId, PermanentUpgradeState, StageId } from '../types';
 
 export interface GameStorage {
   load(): Promise<GameSaveData>;
@@ -100,6 +101,8 @@ export function normalizeSaveData(input: unknown): GameSaveData {
       health: safeUpgradeLevel('health', permanent.health),
       speed: safeUpgradeLevel('speed', permanent.speed),
     },
+    unlockedStageIds: normalizeStageIds(input.unlockedStageIds, [DEFAULT_STAGE_ID]),
+    clearedStageIds: normalizeStageIds(input.clearedStageIds, []),
   };
 }
 
@@ -107,6 +110,8 @@ export function cloneDefaultSave(): GameSaveData {
   return {
     ...DEFAULT_SAVE_DATA,
     permanentUpgrades: { ...DEFAULT_SAVE_DATA.permanentUpgrades },
+    unlockedStageIds: [...DEFAULT_SAVE_DATA.unlockedStageIds],
+    clearedStageIds: [...DEFAULT_SAVE_DATA.clearedStageIds],
   };
 }
 
@@ -123,6 +128,11 @@ function safeUpgradeLevel(id: PermanentUpgradeId, value: unknown): PermanentUpgr
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeStageIds(value: unknown, fallback: StageId[]): StageId[] {
+  const source = Array.isArray(value) ? value : fallback;
+  return STAGE_IDS.filter((stageId) => source.includes(stageId));
 }
 
 function clampInt(value: number, min: number, max: number): number {

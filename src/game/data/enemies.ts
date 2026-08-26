@@ -61,6 +61,30 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     tint: 0xff8bd1,
     behavior: 'swarm',
   },
+  orbiter: {
+    type: 'orbiter',
+    name: 'Orbiter',
+    health: 34,
+    speed: 104,
+    damage: 5,
+    xp: 18,
+    score: 22,
+    radius: 16,
+    tint: 0x8f6dff,
+    behavior: 'runner',
+  },
+  'pulse-caster': {
+    type: 'pulse-caster',
+    name: 'Pulse Caster',
+    health: 50,
+    speed: 68,
+    damage: 6,
+    xp: 25,
+    score: 36,
+    radius: 18,
+    tint: 0xff4fd8,
+    behavior: 'ranged',
+  },
   boss: {
     type: 'boss',
     name: 'Apex Core',
@@ -73,6 +97,18 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     tint: 0xf6f06c,
     behavior: 'boss',
   },
+  'rift-boss': {
+    type: 'rift-boss',
+    name: 'Prism Warden',
+    health: 650,
+    speed: 72,
+    damage: 12,
+    xp: 170,
+    score: 1120,
+    radius: 54,
+    tint: 0xff68f0,
+    behavior: 'boss',
+  },
 };
 
-export const STANDARD_ENEMY_TYPES: EnemyType[] = ['basic', 'runner', 'tank', 'ranged', 'swarm'];
+export const STANDARD_ENEMY_TYPES: EnemyType[] = ['basic', 'runner', 'tank', 'ranged', 'swarm', 'orbiter', 'pulse-caster'];
