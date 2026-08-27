@@ -434,7 +434,9 @@ export class MenuScene extends Phaser.Scene {
     const current = Math.min(level, balance.maxLevel);
     const next = Math.min(level + 1, balance.maxLevel);
     if (id === 'damage') {
-      return current >= balance.maxLevel ? `MAX +${current * 6}% projectile damage` : `+${current * 6}% -> +${next * 6}% projectile damage`;
+      const currentDamage = this.formatPercent(current * balance.effectPerLevel);
+      const nextDamage = this.formatPercent(next * balance.effectPerLevel);
+      return current >= balance.maxLevel ? `MAX +${currentDamage} projectile damage` : `+${currentDamage} -> +${nextDamage} projectile damage`;
     }
     if (id === 'health') {
       return current >= balance.maxLevel ? `MAX +${current * 10} max health` : `+${current * 10} -> +${next * 10} max health`;
@@ -442,5 +444,9 @@ export class MenuScene extends Phaser.Scene {
     const currentSpeed = (current * 2.5).toFixed(1).replace('.0', '');
     const nextSpeed = (next * 2.5).toFixed(1).replace('.0', '');
     return current >= balance.maxLevel ? `MAX +${currentSpeed}% movement speed` : `+${currentSpeed}% -> +${nextSpeed}% movement speed`;
+  }
+
+  private formatPercent(value: number): string {
+    return `${(value * 100).toFixed(1).replace('.0', '')}%`;
   }
 }

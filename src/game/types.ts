@@ -79,6 +79,7 @@ export interface ProjectileData {
   owner: 'player' | 'enemy';
   source?: 'enemy' | 'boss' | 'energy-node';
   damage: number;
+  critical?: boolean;
   pierceLeft: number;
   expiresAt: number;
   knockback: number;

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BOSS_BALANCE, createPlayerStats } from '../config/balance';
+import { BOSS_BALANCE, calculateProjectileVolleyDamageScale, createPlayerStats } from '../config/balance';
 import { GAME_TIMING, UI_DEPTH, WORLD } from '../config/constants';
 import { COLORS, cssColor } from '../config/visual';
 import { ENEMY_DEFINITIONS } from '../data/enemies';
@@ -845,9 +845,10 @@ export class GameScene extends Phaser.Scene {
     this.nextAttackAt = time + 1000 / this.stats.attackSpeed;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
     const count = this.stats.projectileCount;
+    const damageScale = calculateProjectileVolleyDamageScale(count);
     for (let i = 0; i < count; i += 1) {
       const offset = (i - (count - 1) / 2) * Phaser.Math.DegToRad(this.stats.projectileSpread);
-      this.firePlayerProjectile(baseAngle + offset);
+      this.firePlayerProjectile(baseAngle + offset, damageScale);
     }
     this.audio.play('shot');
   }
@@ -876,13 +877,14 @@ export class GameScene extends Phaser.Scene {
     return target;
   }
 
-  private firePlayerProjectile(angle: number): void {
+  private firePlayerProjectile(angle: number, damageScale: number): void {
     const projectile = this.getProjectile(this.playerProjectiles, 'player');
     const critical = Math.random() < this.stats.criticalChance;
-    const damage = this.stats.damage * (critical ? this.stats.criticalDamage : 1);
+    const damage = this.stats.damage * damageScale * (critical ? this.stats.criticalDamage : 1);
     projectile.fire(this.player.x, this.player.y, angle, this.stats.projectileSpeed, {
       owner: 'player',
       damage,
+      critical,
       pierceLeft: this.stats.piercing,
       expiresAt: this.time.now + 1050,
       knockback: this.stats.knockback,
@@ -944,7 +946,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     projectile.hitEnemies.add(enemy);
-    this.damageEnemy(enemy, data.damage, data.knockback, true, 0, data.damage > this.stats.damage * 1.35);
+    this.damageEnemy(enemy, data.damage, data.knockback, true, 0, Boolean(data.critical));
     data.pierceLeft -= 1;
     if (data.pierceLeft < 0) {
       projectile.disableBody(true, true);
@@ -1376,7 +1378,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private clearArenaForBossEntrance(): void {
+    const hpBefore = this.stats.currentHealth;
     this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + this.stage.boss.entryHeal);
+    playtestTelemetry.recordBossEntryRecovery({
+      hpBefore,
+      hpAfter: this.stats.currentHealth,
+      maxHp: this.stats.maxHealth,
+    });
     this.enemies.getChildren().forEach((gameObject) => {
       const enemy = gameObject as Enemy;
       if (enemy.active && enemy.dataModel.behavior !== 'boss') {
@@ -1771,6 +1779,7 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       eliteKills: this.eliteKills,
       remainingHp: Math.max(0, this.stats.currentHealth),
+      maxHp: this.stats.maxHealth,
     });
   }
 
@@ -1805,6 +1814,7 @@ export class GameScene extends Phaser.Scene {
       result,
       durationSeconds: this.elapsedSeconds,
       remainingHp: Math.max(0, this.stats.currentHealth),
+      maxHp: this.stats.maxHealth,
     });
     this.analytics.track('run_completed', { victory, score: finalScore, duration: this.elapsedSeconds });
     this.time.delayedCall(650, () => {

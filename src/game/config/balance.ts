@@ -38,6 +38,11 @@ export const COIN_BALANCE = {
   victoryBonus: 45,
 };
 
+export const PROJECTILE_VOLLEY_BALANCE = {
+  firstExtraProjectileContribution: 0.62,
+  additionalExtraProjectileFalloff: 0.8,
+};
+
 export const PERMANENT_UPGRADE_BALANCE: Record<keyof PermanentUpgradeState, {
   name: string;
   maxLevel: number;
@@ -45,7 +50,7 @@ export const PERMANENT_UPGRADE_BALANCE: Record<keyof PermanentUpgradeState, {
   costGrowth: number;
   effectPerLevel: number;
 }> = {
-  damage: { name: 'Damage', maxLevel: 20, baseCost: 45, costGrowth: 1.34, effectPerLevel: 0.06 },
+  damage: { name: 'Damage', maxLevel: 20, baseCost: 45, costGrowth: 1.34, effectPerLevel: 0.04 },
   health: { name: 'Health', maxLevel: 20, baseCost: 40, costGrowth: 1.32, effectPerLevel: 10 },
   speed: { name: 'Speed', maxLevel: 15, baseCost: 50, costGrowth: 1.38, effectPerLevel: 0.025 },
 };
@@ -57,4 +62,22 @@ export function createPlayerStats(permanent: PermanentUpgradeState): PlayerStats
   stats.currentHealth = stats.maxHealth;
   stats.movementSpeed *= 1 + permanent.speed * PERMANENT_UPGRADE_BALANCE.speed.effectPerLevel;
   return stats;
+}
+
+export function calculateProjectileVolleyEffectiveCount(projectileCount: number): number {
+  const count = Math.max(1, Math.floor(projectileCount));
+  let effectiveCount = 1;
+  let extraContribution = PROJECTILE_VOLLEY_BALANCE.firstExtraProjectileContribution;
+
+  for (let index = 1; index < count; index += 1) {
+    effectiveCount += extraContribution;
+    extraContribution *= PROJECTILE_VOLLEY_BALANCE.additionalExtraProjectileFalloff;
+  }
+
+  return effectiveCount;
+}
+
+export function calculateProjectileVolleyDamageScale(projectileCount: number): number {
+  const count = Math.max(1, Math.floor(projectileCount));
+  return calculateProjectileVolleyEffectiveCount(count) / count;
 }

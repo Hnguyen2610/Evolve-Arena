@@ -52,11 +52,16 @@ export interface PlaytestRunTelemetry {
   bossReachedSeconds: number | null;
   bossDefeated: boolean;
   bossFightDurationSeconds: number | null;
+  hpBeforeBossEntryRecovery: number | null;
+  hpAfterBossEntryRecovery: number | null;
+  bossEntryRecoveryAmount: number | null;
+  maxHpAtBossEntry: number | null;
   energyNodesSpawned: number;
   energyNodesDestroyed: number;
   energyNodePressureHits: number;
   damageTaken: number;
   remainingHp: number | null;
+  maxHp: number | null;
   masteryEarned: number | null;
   previousMastery: number | null;
   masteryImproved: boolean;
@@ -78,6 +83,7 @@ interface CompleteRunInput {
   result: RunResult;
   durationSeconds: number;
   remainingHp: number;
+  maxHp: number;
 }
 
 interface MetaProgressInput {
@@ -167,11 +173,16 @@ export class PlaytestTelemetryService {
       bossReachedSeconds: null,
       bossDefeated: false,
       bossFightDurationSeconds: null,
+      hpBeforeBossEntryRecovery: null,
+      hpAfterBossEntryRecovery: null,
+      bossEntryRecoveryAmount: null,
+      maxHpAtBossEntry: null,
       energyNodesSpawned: 0,
       energyNodesDestroyed: 0,
       energyNodePressureHits: 0,
       damageTaken: 0,
       remainingHp: null,
+      maxHp: null,
       masteryEarned: null,
       previousMastery: null,
       masteryImproved: false,
@@ -246,6 +257,20 @@ export class PlaytestTelemetryService {
     return true;
   }
 
+  recordBossEntryRecovery(input: {
+    hpBefore: number;
+    hpAfter: number;
+    maxHp: number;
+  }): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.hpBeforeBossEntryRecovery = roundSeconds(input.hpBefore);
+    this.currentRun.hpAfterBossEntryRecovery = roundSeconds(input.hpAfter);
+    this.currentRun.bossEntryRecoveryAmount = roundSeconds(Math.max(0, input.hpAfter - input.hpBefore));
+    this.currentRun.maxHpAtBossEntry = roundSeconds(input.maxHp);
+  }
+
   recordEnergyNodeSpawned(seconds: number): void {
     if (!this.currentRun) {
       return;
@@ -289,6 +314,7 @@ export class PlaytestTelemetryService {
     kills: number;
     eliteKills: number;
     remainingHp: number;
+    maxHp: number;
   }): void {
     if (!this.currentRun) {
       return;
@@ -300,6 +326,7 @@ export class PlaytestTelemetryService {
     this.currentRun.kills = input.kills;
     this.currentRun.eliteKills = input.eliteKills;
     this.currentRun.remainingHp = roundSeconds(input.remainingHp);
+    this.currentRun.maxHp = roundSeconds(input.maxHp);
   }
 
   completeRun(input: CompleteRunInput): PlaytestRunTelemetry | null {
@@ -317,6 +344,7 @@ export class PlaytestTelemetryService {
     this.currentRun.eliteKills = input.result.eliteKills;
     this.currentRun.bossDefeated = input.result.bossDefeated;
     this.currentRun.remainingHp = roundSeconds(input.remainingHp);
+    this.currentRun.maxHp = roundSeconds(input.maxHp);
     this.recordEvent(input.result.victory ? 'run_completed' : 'player_died', input.durationSeconds, {
       score: input.result.score,
     });

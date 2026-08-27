@@ -90,6 +90,37 @@ describe('PlaytestTelemetryService', () => {
     expect(run?.bossFightDurationSeconds).toBe(18.4);
   });
 
+  it('records boss entry HP before and after recovery', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-2', 'chapter-1');
+
+    telemetry.recordBossEntryRecovery({
+      hpBefore: 118.24,
+      hpAfter: 198.91,
+      maxHp: 280,
+    });
+
+    expect(telemetry.getCurrentRun()).toMatchObject({
+      hpBeforeBossEntryRecovery: 118.2,
+      hpAfterBossEntryRecovery: 198.9,
+      bossEntryRecoveryAmount: 80.7,
+      maxHpAtBossEntry: 280,
+    });
+  });
+
+  it('does not record negative boss entry recovery', () => {
+    const telemetry = createService();
+    telemetry.beginRun();
+
+    telemetry.recordBossEntryRecovery({
+      hpBefore: 230,
+      hpAfter: 220,
+      maxHp: 240,
+    });
+
+    expect(telemetry.getCurrentRun()?.bossEntryRecoveryAmount).toBe(0);
+  });
+
   it('updates live run progress without completing the run', () => {
     const telemetry = createService();
     telemetry.beginRun('new', 'stage-3', 'chapter-1');
@@ -101,6 +132,7 @@ describe('PlaytestTelemetryService', () => {
       kills: 22,
       eliteKills: 1,
       remainingHp: 77.35,
+      maxHp: 268,
     });
 
     expect(telemetry.getCurrentRun()).toMatchObject({
@@ -111,6 +143,7 @@ describe('PlaytestTelemetryService', () => {
       kills: 22,
       eliteKills: 1,
       remainingHp: 77.4,
+      maxHp: 268,
     });
     expect(telemetry.getSessionSummary().runsCompleted).toBe(0);
   });
@@ -119,7 +152,7 @@ describe('PlaytestTelemetryService', () => {
     const telemetry = createService();
     telemetry.beginRun('new', 'stage-3', 'chapter-1');
     telemetry.recordChapterCompleted('chapter-1', 96.1);
-    telemetry.completeRun({ result: { ...result, stageId: 'stage-3', victory: true, bossDefeated: true }, durationSeconds: 96.1, remainingHp: 42 });
+    telemetry.completeRun({ result: { ...result, stageId: 'stage-3', victory: true, bossDefeated: true }, durationSeconds: 96.1, remainingHp: 42, maxHp: 240 });
 
     expect(telemetry.getCompletedRuns()[0].events).toContainEqual({
       name: 'chapter_completed',
@@ -136,7 +169,7 @@ describe('PlaytestTelemetryService', () => {
     });
     telemetry.beginRun();
 
-    const completed = telemetry.completeRun({ result, durationSeconds: 42.4, remainingHp: 18 });
+    const completed = telemetry.completeRun({ result, durationSeconds: 42.4, remainingHp: 18, maxHp: 240 });
 
     expect(completed?.startTimestamp).toBe(1000);
     expect(completed?.endTimestamp).toBe(61000);
@@ -146,7 +179,7 @@ describe('PlaytestTelemetryService', () => {
   it('increments replay session count when a result play-again run starts', () => {
     const telemetry = createService();
     telemetry.beginRun();
-    telemetry.completeRun({ result, durationSeconds: 30, remainingHp: 0 });
+    telemetry.completeRun({ result, durationSeconds: 30, remainingHp: 0, maxHp: 240 });
     telemetry.beginRun('replay');
 
     expect(telemetry.getSessionSummary()).toMatchObject({
@@ -161,7 +194,7 @@ describe('PlaytestTelemetryService', () => {
     telemetry.beginRun();
     telemetry.recordFirstLevelUp(10);
     telemetry.recordUpgradeSelected('damage', 0, 1, 12, ['damage']);
-    telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0 });
+    telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0, maxHp: 240 });
 
     telemetry.beginRun('replay');
 
@@ -176,7 +209,7 @@ describe('PlaytestTelemetryService', () => {
     telemetry.beginRun();
 
     expect(telemetry.recordFirstLevelUp(10)).toBe(false);
-    expect(telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0 })).toBeNull();
+    expect(telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0, maxHp: 240 })).toBeNull();
     expect(telemetry.getSessionSummary().runsStarted).toBe(0);
   });
 
@@ -184,7 +217,7 @@ describe('PlaytestTelemetryService', () => {
     const telemetry = createService();
     telemetry.beginRun();
     telemetry.recordFirstLevelUp(12);
-    telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0 });
+    telemetry.completeRun({ result, durationSeconds: 40, remainingHp: 0, maxHp: 240 });
 
     const exported = JSON.parse(telemetry.getExportJson());
 
@@ -197,7 +230,7 @@ describe('PlaytestTelemetryService', () => {
   it('attaches mastery and stage record improvements to the latest completed run', () => {
     const telemetry = createService();
     telemetry.beginRun('new', 'stage-3', 'chapter-1');
-    telemetry.completeRun({ result: { ...result, stageId: 'stage-3', victory: true }, durationSeconds: 98, remainingHp: 80 });
+    telemetry.completeRun({ result: { ...result, stageId: 'stage-3', victory: true }, durationSeconds: 98, remainingHp: 80, maxHp: 240 });
     telemetry.recordMetaProgress({
       stageId: 'stage-3',
       masteryEarned: 3,
