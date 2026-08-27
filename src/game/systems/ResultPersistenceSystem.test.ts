@@ -14,6 +14,9 @@ const baseResult: RunResult = {
   survivalSeconds: 75,
   coinsEarned: 12,
   playerLevel: 5,
+  damageTaken: 200,
+  energyNodesDestroyed: 0,
+  energyNodePressureHits: 0,
 };
 
 describe('persistResultAndMaybeSendScore', () => {
@@ -147,5 +150,66 @@ describe('persistResultAndMaybeSendScore', () => {
     expect(outcome.save.coins).toBe(230);
     expect(replay.completedChapterId).toBeNull();
     expect(replay.chapterRewardCoins).toBe(0);
+  });
+
+  it('persists stage mastery and records without changing global best score semantics', async () => {
+    const save = { ...cloneDefaultSave(), bestScore: 3000 };
+    const result = {
+      ...baseResult,
+      victory: true,
+      bossDefeated: true,
+      score: 2200,
+      survivalSeconds: 100,
+      damageTaken: 120,
+    };
+    const markPendingBestScore = vi.fn();
+    const outcome = await persistResultAndMaybeSendScore(save, result, {
+      save: vi.fn(async () => true),
+      markPendingBestScore,
+      synchronizePendingBestScore: vi.fn(async () => false),
+    });
+
+    expect(outcome.newBest).toBe(false);
+    expect(markPendingBestScore).not.toHaveBeenCalled();
+    expect(outcome.currentMastery).toBe(3);
+    expect(outcome.masteryImproved).toBe(true);
+    expect(outcome.newStageBestScore).toBe(true);
+    expect(outcome.newBestClearTime).toBe(true);
+    expect(outcome.save.bestScore).toBe(3000);
+    expect(outcome.save.stageRecords['stage-1']).toEqual({ bestScore: 2200, bestClearTimeSeconds: 100 });
+  });
+
+  it('does not downgrade mastery or clear time on a worse replay', async () => {
+    const first = await persistResultAndMaybeSendScore(cloneDefaultSave(), {
+      ...baseResult,
+      victory: true,
+      bossDefeated: true,
+      score: 2200,
+      survivalSeconds: 100,
+      damageTaken: 120,
+    }, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+    const replay = await persistResultAndMaybeSendScore(first.save, {
+      ...baseResult,
+      victory: true,
+      bossDefeated: true,
+      score: 1800,
+      survivalSeconds: 130,
+      damageTaken: 260,
+    }, {
+      save: vi.fn(async () => true),
+      markPendingBestScore: vi.fn(),
+      synchronizePendingBestScore: vi.fn(async () => true),
+    });
+
+    expect(replay.earnedMastery).toBe(1);
+    expect(replay.currentMastery).toBe(3);
+    expect(replay.masteryImproved).toBe(false);
+    expect(replay.newStageBestScore).toBe(false);
+    expect(replay.newBestClearTime).toBe(false);
+    expect(replay.save.stageRecords['stage-1']).toEqual({ bestScore: 2200, bestClearTimeSeconds: 100 });
   });
 });

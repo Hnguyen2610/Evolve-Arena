@@ -1,5 +1,6 @@
 import type { ChapterId, GameSaveData, RunResult, StageId } from '../types';
 import { applyStageVictoryProgression } from './StageProgressionSystem';
+import { applyStageMetaProgression } from './StageMetaProgressionSystem';
 
 interface ResultPersistenceDependencies {
   save(data: GameSaveData): Promise<boolean>;
@@ -17,6 +18,12 @@ export interface ResultPersistenceOutcome {
   stageRewardCoins: number;
   completedChapterId: ChapterId | null;
   chapterRewardCoins: number;
+  earnedMastery: number;
+  previousMastery: number;
+  currentMastery: number;
+  masteryImproved: boolean;
+  newStageBestScore: boolean;
+  newBestClearTime: boolean;
 }
 
 export async function persistResultAndMaybeSendScore(
@@ -40,7 +47,8 @@ export async function persistResultAndMaybeSendScore(
       completedChapterId: null,
       chapterRewardCoins: 0,
     };
-  const nextSave = stageProgression.save;
+  const metaProgression = applyStageMetaProgression(stageProgression.save, result);
+  const nextSave = metaProgression.save;
 
   if (newBest) {
     dependencies.markPendingBestScore(nextSave.bestScore);
@@ -58,5 +66,11 @@ export async function persistResultAndMaybeSendScore(
     stageRewardCoins: stageProgression.stageRewardCoins,
     completedChapterId: stageProgression.completedChapterId,
     chapterRewardCoins: stageProgression.chapterRewardCoins,
+    earnedMastery: metaProgression.earnedMastery,
+    previousMastery: metaProgression.previousMastery,
+    currentMastery: metaProgression.currentMastery,
+    masteryImproved: metaProgression.masteryImproved,
+    newStageBestScore: metaProgression.newStageBestScore,
+    newBestClearTime: metaProgression.newBestClearTime,
   };
 }

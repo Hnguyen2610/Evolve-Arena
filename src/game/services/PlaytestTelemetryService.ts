@@ -14,6 +14,8 @@ export type PlaytestEventName =
   | 'energy_node_destroyed'
   | 'energy_node_pressure_hit'
   | 'chapter_completed'
+  | 'mastery_improved'
+  | 'stage_record_improved'
   | 'player_died'
   | 'run_completed'
   | 'replay_started';
@@ -55,6 +57,11 @@ export interface PlaytestRunTelemetry {
   energyNodePressureHits: number;
   damageTaken: number;
   remainingHp: number | null;
+  masteryEarned: number | null;
+  previousMastery: number | null;
+  masteryImproved: boolean;
+  newBestStageScore: boolean;
+  newBestClearTime: boolean;
   upgradesSelected: UpgradeSelectionTelemetry[];
   events: PlaytestEvent[];
 }
@@ -71,6 +78,15 @@ interface CompleteRunInput {
   result: RunResult;
   durationSeconds: number;
   remainingHp: number;
+}
+
+interface MetaProgressInput {
+  stageId: StageId;
+  masteryEarned: number;
+  previousMastery: number;
+  masteryImproved: boolean;
+  newBestStageScore: boolean;
+  newBestClearTime: boolean;
 }
 
 interface PlaytestTelemetryOptions {
@@ -156,6 +172,11 @@ export class PlaytestTelemetryService {
       energyNodePressureHits: 0,
       damageTaken: 0,
       remainingHp: null,
+      masteryEarned: null,
+      previousMastery: null,
+      masteryImproved: false,
+      newBestStageScore: false,
+      newBestClearTime: false,
       upgradesSelected: [],
       events: [],
     };
@@ -319,6 +340,41 @@ export class PlaytestTelemetryService {
     this.currentRun = null;
     this.logRunSummary(completed);
     return completed;
+  }
+
+  recordMetaProgress(input: MetaProgressInput): void {
+    const latest = this.completedRuns[this.completedRuns.length - 1];
+    if (!latest || latest.stageId !== input.stageId) {
+      return;
+    }
+
+    latest.masteryEarned = input.masteryEarned;
+    latest.previousMastery = input.previousMastery;
+    latest.masteryImproved = input.masteryImproved;
+    latest.newBestStageScore = input.newBestStageScore;
+    latest.newBestClearTime = input.newBestClearTime;
+
+    if (input.masteryImproved) {
+      latest.events.push({
+        name: 'mastery_improved',
+        atSeconds: latest.durationSeconds,
+        payload: {
+          previousMastery: input.previousMastery,
+          masteryEarned: input.masteryEarned,
+        },
+      });
+    }
+
+    if (input.newBestStageScore || input.newBestClearTime) {
+      latest.events.push({
+        name: 'stage_record_improved',
+        atSeconds: latest.durationSeconds,
+        payload: {
+          newBestStageScore: input.newBestStageScore,
+          newBestClearTime: input.newBestClearTime,
+        },
+      });
+    }
   }
 
   getCurrentRun(): PlaytestRunTelemetry | null {

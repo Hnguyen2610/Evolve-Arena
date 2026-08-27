@@ -16,6 +16,8 @@ describe('StorageService', () => {
     expect(save.unlockedStageIds).toEqual(['stage-1']);
     expect(save.clearedStageIds).toEqual([]);
     expect(save.clearedChapterIds).toEqual([]);
+    expect(save.stageMastery).toEqual({});
+    expect(save.stageRecords).toEqual({});
   });
 
   it('normalizes persisted stage progress', () => {
@@ -38,6 +40,27 @@ describe('StorageService', () => {
 
     expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3']);
     expect(save.clearedChapterIds).toEqual([]);
+    expect(save.stageMastery).toEqual({ 'stage-1': 1, 'stage-2': 1 });
+    expect(save.stageRecords).toEqual({});
+  });
+
+  it('normalizes stage mastery and records without awarding fake full mastery', () => {
+    const save = parseSaveData(JSON.stringify({
+      clearedStageIds: ['stage-1'],
+      stageMastery: {
+        'stage-1': 9,
+        'stage-2': -3,
+        missing: 3,
+      },
+      stageRecords: {
+        'stage-1': { bestScore: 1200, bestClearTimeSeconds: 98.26 },
+        'stage-2': { bestScore: -20, bestClearTimeSeconds: -1 },
+        missing: { bestScore: 9999 },
+      },
+    }));
+
+    expect(save.stageMastery).toEqual({ 'stage-1': 3 });
+    expect(save.stageRecords).toEqual({ 'stage-1': { bestScore: 1200, bestClearTimeSeconds: 98.3 } });
   });
 
   it('clones default stage arrays independently', () => {

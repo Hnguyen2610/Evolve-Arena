@@ -13,6 +13,9 @@ const result: RunResult = {
   survivalSeconds: 96.3,
   coinsEarned: 37,
   playerLevel: 8,
+  damageTaken: 75,
+  energyNodesDestroyed: 0,
+  energyNodePressureHits: 0,
 };
 
 function createService(): PlaytestTelemetryService {
@@ -189,5 +192,39 @@ describe('PlaytestTelemetryService', () => {
     expect(exported.session.runsCompleted).toBe(1);
     expect(exported.completedRuns[0].firstLevelUpSeconds).toBe(12);
     expect(exported.currentRun).toBeNull();
+  });
+
+  it('attaches mastery and stage record improvements to the latest completed run', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-3', 'chapter-1');
+    telemetry.completeRun({ result: { ...result, stageId: 'stage-3', victory: true }, durationSeconds: 98, remainingHp: 80 });
+    telemetry.recordMetaProgress({
+      stageId: 'stage-3',
+      masteryEarned: 3,
+      previousMastery: 1,
+      masteryImproved: true,
+      newBestStageScore: true,
+      newBestClearTime: true,
+    });
+
+    expect(telemetry.getCompletedRuns()[0]).toMatchObject({
+      masteryEarned: 3,
+      previousMastery: 1,
+      masteryImproved: true,
+      newBestStageScore: true,
+      newBestClearTime: true,
+    });
+    expect(telemetry.getCompletedRuns()[0].events).toEqual(expect.arrayContaining([
+      {
+        name: 'mastery_improved',
+        atSeconds: 98,
+        payload: { previousMastery: 1, masteryEarned: 3 },
+      },
+      {
+        name: 'stage_record_improved',
+        atSeconds: 98,
+        payload: { newBestStageScore: true, newBestClearTime: true },
+      },
+    ]));
   });
 });

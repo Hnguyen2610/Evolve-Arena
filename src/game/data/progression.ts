@@ -14,4 +14,6 @@ export const DEFAULT_SAVE_DATA: GameSaveData = {
   unlockedStageIds: [DEFAULT_STAGE_ID],
   clearedStageIds: [],
   clearedChapterIds: [],
+  stageMastery: {},
+  stageRecords: {},
 };

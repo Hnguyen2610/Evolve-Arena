@@ -110,6 +110,15 @@ export interface PermanentUpgradeState {
   speed: number;
 }
 
+export interface StageRecord {
+  bestScore: number;
+  bestClearTimeSeconds?: number;
+}
+
+export type StageMasteryState = Partial<Record<StageId, number>>;
+
+export type StageRecordsState = Partial<Record<StageId, StageRecord>>;
+
 export interface GameSaveData {
   version: number;
   bestScore: number;
@@ -118,6 +127,8 @@ export interface GameSaveData {
   unlockedStageIds: StageId[];
   clearedStageIds: StageId[];
   clearedChapterIds: ChapterId[];
+  stageMastery: StageMasteryState;
+  stageRecords: StageRecordsState;
 }
 
 export interface RunResult {
@@ -131,6 +142,9 @@ export interface RunResult {
   survivalSeconds: number;
   coinsEarned: number;
   playerLevel: number;
+  damageTaken: number;
+  energyNodesDestroyed: number;
+  energyNodePressureHits: number;
 }
 
 export interface StageVisualTheme {

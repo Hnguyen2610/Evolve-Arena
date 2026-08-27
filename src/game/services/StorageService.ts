@@ -3,6 +3,7 @@ import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
 import { CHAPTER_IDS } from '../data/chapters';
 import { DEFAULT_SAVE_DATA } from '../data/progression';
 import { DEFAULT_STAGE_ID, STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
+import { normalizeStageMasteryState, normalizeStageRecordsState } from '../systems/StageMetaProgressionSystem';
 import { youtubePlayables, type YouTubePlayablesService } from './YouTubePlayablesService';
 import type { ChapterId, GameSaveData, PermanentUpgradeId, PermanentUpgradeState, StageId } from '../types';
 
@@ -106,6 +107,8 @@ export function normalizeSaveData(input: unknown): GameSaveData {
     unlockedStageIds: deriveUnlockedStageIds(normalizeStageIds(input.unlockedStageIds, [DEFAULT_STAGE_ID]), clearedStageIds),
     clearedStageIds,
     clearedChapterIds: normalizeChapterIds(input.clearedChapterIds, []),
+    stageMastery: normalizeStageMasteryState(input.stageMastery, clearedStageIds),
+    stageRecords: normalizeStageRecordsState(input.stageRecords),
   };
 }
 
@@ -116,6 +119,8 @@ export function cloneDefaultSave(): GameSaveData {
     unlockedStageIds: [...DEFAULT_SAVE_DATA.unlockedStageIds],
     clearedStageIds: [...DEFAULT_SAVE_DATA.clearedStageIds],
     clearedChapterIds: [...DEFAULT_SAVE_DATA.clearedChapterIds],
+    stageMastery: { ...DEFAULT_SAVE_DATA.stageMastery },
+    stageRecords: { ...DEFAULT_SAVE_DATA.stageRecords },
   };
 }
 

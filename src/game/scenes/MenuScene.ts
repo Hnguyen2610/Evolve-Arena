@@ -283,7 +283,7 @@ export class MenuScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5);
     const effect = this.add
-      .text(-width / 2 + 14, height < 66 ? 4 : 2, this.getPermanentUpgradeEffectText(id), {
+      .text(-width / 2 + 14, height < 66 ? 4 : 2, this.getPermanentUpgradeEffectText(id, level), {
         color: '#b9c7dc',
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: height < 66 ? '11px' : '12px',
@@ -429,13 +429,18 @@ export class MenuScene extends Phaser.Scene {
     this.ambientTweens = [];
   }
 
-  private getPermanentUpgradeEffectText(id: PermanentUpgradeId): string {
+  private getPermanentUpgradeEffectText(id: PermanentUpgradeId, level: number): string {
+    const balance = PERMANENT_UPGRADE_BALANCE[id];
+    const current = Math.min(level, balance.maxLevel);
+    const next = Math.min(level + 1, balance.maxLevel);
     if (id === 'damage') {
-      return '+6% projectile damage / level';
+      return current >= balance.maxLevel ? `MAX +${current * 6}% projectile damage` : `+${current * 6}% -> +${next * 6}% projectile damage`;
     }
     if (id === 'health') {
-      return '+10 max health / level';
+      return current >= balance.maxLevel ? `MAX +${current * 10} max health` : `+${current * 10} -> +${next * 10} max health`;
     }
-    return '+2.5% movement speed / level';
+    const currentSpeed = (current * 2.5).toFixed(1).replace('.0', '');
+    const nextSpeed = (next * 2.5).toFixed(1).replace('.0', '');
+    return current >= balance.maxLevel ? `MAX +${currentSpeed}% movement speed` : `+${currentSpeed}% -> +${nextSpeed}% movement speed`;
   }
 }

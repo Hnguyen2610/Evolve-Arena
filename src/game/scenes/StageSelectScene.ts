@@ -3,7 +3,15 @@ import { COLORS } from '../config/visual';
 import { CHAPTER_DEFINITIONS, CHAPTER_IDS } from '../data/chapters';
 import { STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
 import { getClearedChapterIds, getClearedStageIds, isStageUnlocked } from '../systems/StageProgressionSystem';
-import type { GameSaveData, StageDefinition } from '../types';
+import {
+  formatClearTime,
+  formatMasteryStars,
+  getChapterMasterySummary,
+  getStageMastery,
+  getStageMasteryObjective,
+  getStageRecord,
+} from '../systems/StageMetaProgressionSystem';
+import type { GameSaveData, StageDefinition, StageRecord } from '../types';
 
 interface StageSelectSceneData {
   save: GameSaveData;
@@ -51,10 +59,16 @@ export class StageSelectScene extends Phaser.Scene {
     );
     const chapter = CHAPTER_DEFINITIONS[CHAPTER_IDS[0]];
     const chapterCleared = getClearedChapterIds(this.save).includes(chapter.id);
+    const chapterMastery = getChapterMasterySummary(this.save, chapter.id);
+    const chapterStatus = chapterMastery.mastered
+      ? 'CHAPTER MASTERED'
+      : chapterCleared
+        ? `COMPLETE  |  MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} ★`
+        : `MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} ★  |  ${chapter.subtitle}`;
     this.addNode(
       this.add
-        .text(width / 2, titleY + (shortLandscape ? 30 : 42), `${chapter.name.toUpperCase()}  |  ${chapterCleared ? 'CLEARED' : chapter.subtitle}`, {
-          color: chapterCleared ? '#9ff7db' : '#d7edff',
+        .text(width / 2, titleY + (shortLandscape ? 30 : 42), `${chapter.name.toUpperCase()}  |  ${chapterStatus}`, {
+          color: chapterMastery.mastered ? '#fff5a8' : chapterCleared ? '#9ff7db' : '#d7edff',
           fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '12px' : '14px',
           fontStyle: '900',
@@ -66,7 +80,7 @@ export class StageSelectScene extends Phaser.Scene {
 
     const clearedIds = getClearedStageIds(this.save);
     const cardWidth = shortLandscape ? Math.min(262, (width - 96) / 3) : Math.min(420, width - 42);
-    const cardHeight = shortLandscape ? 166 : 132;
+    const cardHeight = shortLandscape ? 166 : 154;
     const startY = shortLandscape ? height * 0.56 : titleY + 132;
     const gap = shortLandscape ? cardWidth + 20 : cardHeight + 16;
 
@@ -131,7 +145,7 @@ export class StageSelectScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
     const lockMessage = stage.id === 'stage-3' ? 'Clear Stage 2 to unlock.' : 'Clear Stage 1 to unlock.';
     const description = this.add
-      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 80 : 82), unlocked ? stage.description : lockMessage, {
+      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 96 : 95), unlocked ? stage.description : lockMessage, {
         color: unlocked ? COLORS.uiTextMuted : '#7f8ba3',
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: shortLandscape ? '11px' : '12px',
@@ -139,16 +153,50 @@ export class StageSelectScene extends Phaser.Scene {
         wordWrap: { width: width - 44 },
       })
       .setOrigin(0, 0);
+    const mastery = unlocked ? getStageMastery(this.save, stage.id) : 0;
+    const record = unlocked ? getStageRecord(this.save, stage.id) : { bestScore: 0 };
+    const objective = getStageMasteryObjective(stage.id);
+    const nextGoal = this.getNextMasteryGoal(mastery, objective, shortLandscape);
+    const statusText = !unlocked ? 'LOCKED' : mastery >= 3 ? 'MASTERED' : cleared ? 'IMPROVE' : 'READY';
     const status = this.add
-      .text(width / 2 - 22, height / 2 - 22, cleared ? 'CLEARED' : unlocked ? 'READY' : 'LOCKED', {
+      .text(width / 2 - 22, height / 2 - 20, statusText, {
         color: cleared ? '#9ff7db' : unlocked ? '#f7fbff' : '#7f8ba3',
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: shortLandscape ? '12px' : '13px',
         fontStyle: '900',
       })
       .setOrigin(1, 0.5);
+    const stars = this.add
+      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 78 : 76), unlocked ? formatMasteryStars(mastery) : '', {
+        color: mastery >= 3 ? '#fff5a8' : stage.visualTheme.phase2 === COLORS.uiPrimary ? '#9ff7db' : '#ffd166',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '18px' : '20px',
+        fontStyle: '900',
+      })
+      .setOrigin(0, 0.5);
+    const records = this.add
+      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 118 : 116), unlocked ? this.formatRecordLine(record.bestScore, record.bestClearTimeSeconds) : '', {
+        color: COLORS.uiTextMuted,
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '10px' : '12px',
+        fontStyle: '800',
+        wordWrap: { width: width - 44 },
+      })
+      .setOrigin(0, 0.5);
+    const goal = this.add
+      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 142 : 139), unlocked ? nextGoal : '', {
+        color: mastery >= 3 ? '#fff5a8' : '#d7edff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '10px' : '11px',
+        fontStyle: '800',
+        wordWrap: { width: width - 44 },
+      })
+      .setOrigin(0, 0.5);
 
-    const card = this.add.container(x, y, [shadow, bg, band, badge, number, title, subtitle, description, status]);
+    description.setText(unlocked ? objective.identity : lockMessage);
+    description.setFontSize(shortLandscape ? 10 : 11);
+
+    const card = this.add.container(x, y, [shadow, bg, band, badge, number, title, subtitle, description, stars, records, goal, status]);
     if (unlocked) {
       bg.setInteractive({ useHandCursor: true });
       bg.on('pointerover', () => bg.setFillStyle(COLORS.uiPanelLight, 0.98));
@@ -184,6 +232,38 @@ export class StageSelectScene extends Phaser.Scene {
     bg.setInteractive({ useHandCursor: true });
     bg.on('pointerup', onClick);
     return this.add.container(x, y, [shadow, bg, text]);
+  }
+
+  private getNextMasteryGoal(
+    stars: number,
+    objective: ReturnType<typeof getStageMasteryObjective>,
+    compact: boolean,
+  ): string {
+    if (stars <= 0) {
+      return compact ? 'Goal: clear' : `Next ★ ${objective.oneStar}`;
+    }
+    if (stars === 1) {
+      return compact ? `Goal: ${objective.twoStars.replace('Clear ', '')}` : `Next ★★ ${objective.twoStars}`;
+    }
+    if (stars === 2) {
+      if (compact && objective.threeStars.includes('Energy Nodes')) {
+        return 'Goal: 3 nodes, <=4 hits';
+      }
+      if (compact && objective.threeStars.includes('130')) {
+        return 'Goal: <=130 damage';
+      }
+      if (compact && objective.threeStars.includes('180')) {
+        return 'Goal: <=180 damage';
+      }
+      return `Next ★★★ ${objective.threeStars}`;
+    }
+    return compact ? '' : 'Stage mastery complete';
+  }
+
+  private formatRecordLine(bestScore: StageRecord['bestScore'], bestClearTimeSeconds: StageRecord['bestClearTimeSeconds']): string {
+    const bestScoreText = bestScore > 0 ? String(bestScore) : '--';
+    const timeText = bestClearTimeSeconds === undefined ? '--' : formatClearTime(bestClearTimeSeconds);
+    return `Best ${bestScoreText}   Clear ${timeText}`;
   }
 
   private addBackdrop(width: number, height: number): void {

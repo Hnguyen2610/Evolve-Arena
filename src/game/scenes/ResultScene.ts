@@ -2,10 +2,11 @@ import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
 import { getChapterDefinition } from '../data/chapters';
 import { getStageDefinition } from '../data/stages';
-import { gameStorage, platform } from '../services/PlatformServices';
+import { gameStorage, platform, playtestTelemetry } from '../services/PlatformServices';
 import { markPendingBestScore, setLatestSaveSnapshot, synchronizePendingBestScore } from '../services/PersistenceCoordinator';
 import { saveBestEffort } from '../services/StorageService';
 import { persistResultAndMaybeSendScore } from '../systems/ResultPersistenceSystem';
+import { formatClearTime, formatMasteryStars, getStageRecord } from '../systems/StageMetaProgressionSystem';
 import type { GameSaveData, RunResult } from '../types';
 
 interface ResultSceneData {
@@ -41,7 +42,16 @@ export class ResultScene extends Phaser.Scene {
     const newBest = persistence.newBest;
     this.save = persistence.save;
     setLatestSaveSnapshot(this.save);
+    playtestTelemetry.recordMetaProgress({
+      stageId: this.result.stageId,
+      masteryEarned: persistence.earnedMastery,
+      previousMastery: persistence.previousMastery,
+      masteryImproved: persistence.masteryImproved,
+      newBestStageScore: persistence.newStageBestScore,
+      newBestClearTime: persistence.newBestClearTime,
+    });
     const stage = getStageDefinition(this.result.stageId);
+    const stageRecord = getStageRecord(this.save, this.result.stageId);
     const { width, height } = this.scale;
     const centerX = width / 2;
     const shortLandscape = width > height && height < 520;
@@ -80,13 +90,22 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3);
 
-    if (newBest) {
+    const improvementText = [
+      newBest ? 'NEW GLOBAL BEST' : null,
+      persistence.newStageBestScore ? 'NEW STAGE BEST' : null,
+      persistence.newBestClearTime ? 'NEW BEST TIME' : null,
+      persistence.masteryImproved ? 'NEW MASTERY' : null,
+    ].filter((item): item is string => item !== null).join('   ');
+
+    if (improvementText) {
       this.add
-        .text(centerX, panelY - panelHeight * 0.2, 'NEW BEST!', {
+        .text(centerX, panelY - panelHeight * 0.2, improvementText, {
           color: '#9ff7db',
           fontFamily: 'Arial, Helvetica, sans-serif',
-          fontSize: shortLandscape ? '15px' : '17px',
+          fontSize: shortLandscape ? '12px' : '16px',
           fontStyle: '900',
+          align: 'center',
+          wordWrap: { width: panelWidth - 42 },
         })
         .setOrigin(0.5)
         .setDepth(3);
@@ -137,10 +156,23 @@ export class ResultScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3);
 
+    const masteryText = `Mastery ${formatMasteryStars(persistence.currentMastery)}   Stage Best ${stageRecord.bestScore}   Best Clear ${stageRecord.bestClearTimeSeconds === undefined ? '--' : formatClearTime(stageRecord.bestClearTimeSeconds)}`;
+    this.add
+      .text(centerX, scoreY + (shortLandscape ? 84 : 104), masteryText, {
+        color: persistence.masteryImproved ? '#fff5a8' : '#dfe9ff',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '12px' : '14px',
+        fontStyle: '900',
+        align: 'center',
+        wordWrap: { width: panelWidth - 42 },
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+
     if (persistence.newlyUnlockedStageId) {
       const unlocked = getStageDefinition(persistence.newlyUnlockedStageId);
       this.add
-        .text(centerX, scoreY + (shortLandscape ? 86 : 106), `${unlocked.name.toUpperCase()} UNLOCKED`, {
+        .text(centerX, scoreY + (shortLandscape ? 104 : 128), `${unlocked.name.toUpperCase()} UNLOCKED`, {
           color: '#9ff7db',
           fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '12px' : '14px',
@@ -154,7 +186,7 @@ export class ResultScene extends Phaser.Scene {
     if (persistence.completedChapterId) {
       const completedChapter = getChapterDefinition(persistence.completedChapterId);
       this.add
-        .text(centerX, scoreY + (shortLandscape ? 106 : 128), `${completedChapter.name.toUpperCase()} COMPLETE`, {
+        .text(centerX, scoreY + (shortLandscape ? 122 : 150), `${completedChapter.name.toUpperCase()} COMPLETE`, {
           color: '#fff5a8',
           fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '12px' : '14px',

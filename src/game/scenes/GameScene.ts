@@ -108,6 +108,9 @@ export class GameScene extends Phaser.Scene {
   private nextEnergyNodeAt = 0;
   private nextBossSupportNodeAt = 0;
   private nextTelemetryProgressAt = 0;
+  private damageTaken = 0;
+  private energyNodesDestroyed = 0;
+  private energyNodePressureHits = 0;
 
   constructor() {
     super('GameScene');
@@ -174,6 +177,9 @@ export class GameScene extends Phaser.Scene {
     this.nextEnergyNodeAt = 0;
     this.nextBossSupportNodeAt = 0;
     this.nextTelemetryProgressAt = 0;
+    this.damageTaken = 0;
+    this.energyNodesDestroyed = 0;
+    this.energyNodePressureHits = 0;
     this.stageHazards.forEach((hazard) => {
       hazard.zone.destroy();
       hazard.core.destroy();
@@ -957,6 +963,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (projectile.projectileData.source === 'energy-node') {
+      this.energyNodePressureHits += 1;
       playtestTelemetry.recordEnergyNodePressureHit(this.elapsedSeconds);
     }
     this.damagePlayer(projectile.projectileData.damage);
@@ -1012,6 +1019,7 @@ export class GameScene extends Phaser.Scene {
       playtestTelemetry.recordEliteKilled(this.elapsedSeconds);
     }
     if (data.type === ENERGY_NODE_TYPE) {
+      this.energyNodesDestroyed += 1;
       playtestTelemetry.recordEnergyNodeDestroyed(this.elapsedSeconds);
     }
     if (data.behavior === 'boss') {
@@ -1066,6 +1074,7 @@ export class GameScene extends Phaser.Scene {
   private damagePlayer(rawDamage: number): void {
     const damage = Math.max(1, rawDamage - this.stats.armor);
     this.stats.currentHealth -= damage;
+    this.damageTaken += damage;
     playtestTelemetry.recordDamageTaken(damage);
     this.cameras.main.shake(90, 0.004);
     this.showDamage(this.player.x, this.player.y - 24, Math.floor(damage), '#ff9aa8');
@@ -1785,6 +1794,9 @@ export class GameScene extends Phaser.Scene {
       survivalSeconds: this.elapsedSeconds,
       coinsEarned: calculateCoins(finalScore, this.kills, victory, this.bossDefeated),
       playerLevel: this.level,
+      damageTaken: this.damageTaken,
+      energyNodesDestroyed: this.energyNodesDestroyed,
+      energyNodePressureHits: this.energyNodePressureHits,
     };
     if (victory && this.stage.id === 'stage-3' && !this.save.clearedChapterIds.includes(this.stage.chapterId)) {
       playtestTelemetry.recordChapterCompleted(this.stage.chapterId, this.elapsedSeconds);
