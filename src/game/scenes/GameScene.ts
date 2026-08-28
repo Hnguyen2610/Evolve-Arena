@@ -1186,7 +1186,7 @@ export class GameScene extends Phaser.Scene {
       this.createGuardianShieldPulse(enemy.x, enemy.y);
     }
     this.createHitImpact(enemy, critical);
-    this.tweens.add({ targets: enemy, alpha: 0.45, duration: 55, yoyo: true });
+    enemy.showHitFeedback();
     const push = new Phaser.Math.Vector2(enemy.x - this.player.x, enemy.y - this.player.y).normalize().scale(knockback);
     const body = enemy.body as Phaser.Physics.Arcade.Body | null;
     enemy.setVelocity((body?.velocity.x ?? 0) + push.x, (body?.velocity.y ?? 0) + push.y);

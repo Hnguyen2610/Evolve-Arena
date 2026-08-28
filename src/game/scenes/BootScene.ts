@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { UI_DEPTH } from '../config/constants';
+import { ENEMY_VISUAL_ATLAS, registerEnemyVisualAnimations } from '../config/enemyVisual';
 import { PLAYER_VISUAL, registerPlayerVisualAnimations } from '../config/playerVisual';
 import { COLORS, ENEMY_COLORS } from '../config/visual';
 import { gameStorage, platform } from '../services/PlatformServices';
@@ -13,6 +14,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.spritesheet(ENEMY_VISUAL_ATLAS.textureKey, ENEMY_VISUAL_ATLAS.assetPath, {
+      frameWidth: ENEMY_VISUAL_ATLAS.frameWidth,
+      frameHeight: ENEMY_VISUAL_ATLAS.frameHeight,
+    });
     this.load.spritesheet(PLAYER_VISUAL.textureKey, PLAYER_VISUAL.assetPath, {
       frameWidth: PLAYER_VISUAL.frameWidth,
       frameHeight: PLAYER_VISUAL.frameHeight,
@@ -23,6 +28,9 @@ export class BootScene extends Phaser.Scene {
     this.createTextures();
     if (this.textures.exists(PLAYER_VISUAL.textureKey)) {
       registerPlayerVisualAnimations(this.anims);
+    }
+    if (this.textures.exists(ENEMY_VISUAL_ATLAS.textureKey)) {
+      registerEnemyVisualAnimations(this.anims);
     }
     this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, COLORS.backgroundDeep, 1);
     this.add

@@ -1,21 +1,33 @@
 import Phaser from 'phaser';
+import {
+  ENEMY_VISUAL_ATLAS,
+  getEnemyVisualAnimationKey,
+  getEnemyVisualConfig,
+  getEnemyVisualStartFrame,
+  type EnemyVisualConfig,
+} from '../config/enemyVisual';
 import { COLORS } from '../config/visual';
 import type { EnemyDefinition, EnemyRuntimeData } from '../types';
 import { addGlowFx, addShadowFx } from '../utils/phaserFx';
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   dataModel: EnemyRuntimeData;
+  private readonly visualConfig: EnemyVisualConfig | null;
+  private readonly visual?: Phaser.GameObjects.Sprite;
   private readonly eliteRing?: Phaser.GameObjects.Image;
   private readonly glow?: Phaser.GameObjects.Image;
   private readonly bossRing?: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Ellipse;
   private readonly baseDisplayScale: number;
+  private readonly baseVisualScale: number;
   private readonly fxGlow: Phaser.FX.Glow | null;
   private readonly fxShadow: Phaser.FX.Shadow | null;
+  private hurtFeedbackUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
     const bossType = definition.behavior === 'boss';
     super(scene, x, y, bossType ? definition.type : `enemy-${definition.type}`);
+    this.visualConfig = bossType ? null : getEnemyVisualConfig(definition.type);
     const healthScale = elite ? 2.8 : 1;
     const damageScale = elite ? 1.45 : 1;
     this.dataModel = {
@@ -40,6 +52,19 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setTint(elite ? 0xffffff : definition.tint);
     this.setScale(elite ? 1.28 : 1);
     this.baseDisplayScale = elite ? 1.28 : 1;
+    this.baseVisualScale = (this.visualConfig?.scale ?? 1) * (elite ? 1.16 : 1);
+    if (this.visualConfig && scene.textures.exists(ENEMY_VISUAL_ATLAS.textureKey)) {
+      const startFrame = getEnemyVisualStartFrame(this.visualConfig);
+      this.visual = scene.add
+        .sprite(x, y, ENEMY_VISUAL_ATLAS.textureKey, startFrame)
+        .setDepth(8)
+        .setScale(this.baseVisualScale);
+      const animationKey = getEnemyVisualAnimationKey(this.visualConfig.enemyType);
+      if (scene.anims.exists(animationKey)) {
+        this.visual.play(animationKey);
+      }
+      this.setVisible(false);
+    }
     this.shadow = scene.add
       .ellipse(x, y + definition.radius * 0.58, definition.radius * (elite ? 2.25 : 1.85), definition.radius * 0.72, definition.tint, bossType ? 0.18 : 0.12)
       .setDepth(6);
@@ -63,6 +88,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     this.updateBodyMotion(time);
+    this.updateVisualPresentation(time);
     this.shadow
       .setPosition(this.x, this.y + this.dataModel.radius * 0.58)
         .setScale(this.isBossType() ? this.scaleX * 1.18 : this.scaleX, Math.max(0.75, this.scaleY))
@@ -103,6 +129,44 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         .setScale(this.scaleX * (1.02 + Math.sin(time / 190) * (charging ? 0.045 : 0.018 + instability * 0.02)))
         .setAlpha(charging ? 1 : 0.76 + instability * 0.18)
         .setVisible(this.active);
+    }
+  }
+
+  showHitFeedback(): void {
+    const target = this.visual ?? this;
+    this.hurtFeedbackUntil = this.scene.time.now + 130;
+    target.setTint(0xffffff);
+    this.scene.tweens.killTweensOf(target);
+    this.scene.tweens.add({
+      targets: target,
+      alpha: 0.48,
+      duration: 55,
+      yoyo: true,
+      onComplete: () => {
+        target.clearTint();
+        target.setAlpha(1);
+      },
+    });
+  }
+
+  private updateVisualPresentation(time: number): void {
+    if (!this.visual || !this.visualConfig) {
+      return;
+    }
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    if (body && Math.abs(body.velocity.x) > 8) {
+      this.visual.setFlipX(body.velocity.x < 0);
+    }
+    const scaleX = this.baseVisualScale * (this.scaleX / this.baseDisplayScale);
+    const scaleY = this.baseVisualScale * (this.scaleY / this.baseDisplayScale);
+    const floating = this.dataModel.behavior === 'ranged' || this.dataModel.behavior === 'node';
+    const hover = floating ? Math.sin(time / 260 + this.x * 0.01) * 1.4 : 0;
+    this.visual
+      .setPosition(this.x, this.y + hover)
+      .setScale(scaleX, scaleY)
+      .setVisible(this.active);
+    if (time >= this.hurtFeedbackUntil) {
+      this.visual.setAlpha(1);
     }
   }
 
@@ -169,6 +233,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {
     super.disableBody(disableGameObject, hideGameObject);
+    this.visual?.setVisible(false);
     this.eliteRing?.setVisible(false);
     this.glow?.setVisible(false);
     this.bossRing?.setVisible(false);
@@ -177,6 +242,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene?: boolean): void {
+    this.visual?.destroy();
     this.eliteRing?.destroy();
     this.glow?.destroy();
     this.bossRing?.destroy();
