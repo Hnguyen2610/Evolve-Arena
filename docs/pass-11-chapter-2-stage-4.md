@@ -53,6 +53,7 @@ Telemetry now records:
 - `arenaShifts`
 - `overloadEvents`
 - `overloadHits`
+- `overloadDamageTaken`
 
 These are included in run completion data and exposed through the existing playtest inspection API.
 

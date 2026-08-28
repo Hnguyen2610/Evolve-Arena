@@ -81,6 +81,17 @@ export function getArenaSectorForPoint(
   return Math.min(sectorCount - 1, Math.floor((angle / (Math.PI * 2)) * sectorCount));
 }
 
+export function getArenaSectorBounds(sector: number, sectors: number): { start: number; end: number } {
+  const sectorCount = Math.max(1, Math.floor(sectors));
+  const sectorAngle = (Math.PI * 2) / sectorCount;
+  const normalizedSector = Math.min(sectorCount - 1, Math.max(0, Math.floor(sector)));
+  const start = normalizedSector * sectorAngle;
+  return {
+    start,
+    end: start + sectorAngle,
+  };
+}
+
 export function isSectorDangerous(state: ArenaShiftState, sector: number): boolean {
   return state.phase === 'overload' && state.dangerousSectors.includes(sector);
 }

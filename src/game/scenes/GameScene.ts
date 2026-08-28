@@ -24,6 +24,7 @@ import { calculateCoins, calculateScoreBonus } from '../systems/ScoreSystem';
 import { applyUpgrade, pickUpgradeOptions } from '../systems/UpgradeSystem';
 import { isStageUnlocked } from '../systems/StageProgressionSystem';
 import {
+  getArenaSectorBounds,
   getArenaSectorForPoint,
   getArenaShiftState,
   isSectorDangerous,
@@ -127,6 +128,7 @@ export class GameScene extends Phaser.Scene {
   private arenaShifts = 0;
   private overloadEvents = 0;
   private overloadHits = 0;
+  private overloadDamageTaken = 0;
 
   constructor() {
     super('GameScene');
@@ -203,6 +205,7 @@ export class GameScene extends Phaser.Scene {
     this.arenaShifts = 0;
     this.overloadEvents = 0;
     this.overloadHits = 0;
+    this.overloadDamageTaken = 0;
     this.stageHazards.forEach((hazard) => {
       hazard.zone.destroy();
       hazard.core.destroy();
@@ -370,11 +373,11 @@ export class GameScene extends Phaser.Scene {
     if (state.enabled && (state.phase !== this.arenaShiftPhase || state.cycleIndex !== this.arenaShiftCycleIndex)) {
       if (state.phase === 'warning') {
         this.arenaShifts += 1;
-        playtestTelemetry.recordArenaShift(state.phase, this.elapsedSeconds);
+        playtestTelemetry.recordArenaShift(state.phase, this.elapsedSeconds, state.dangerousSectors, state.cycleIndex);
         this.hud.showHint('Grid sectors shifting.');
       } else if (state.phase === 'overload') {
         this.overloadEvents += 1;
-        playtestTelemetry.recordOverloadStarted(this.elapsedSeconds);
+        playtestTelemetry.recordOverloadStarted(this.elapsedSeconds, state.dangerousSectors, state.cycleIndex);
         this.hud.showHint('Avoid overload lanes.');
         this.audio.play('bossAttack');
       }
@@ -405,13 +408,11 @@ export class GameScene extends Phaser.Scene {
     const centerX = WORLD.width / 2;
     const centerY = WORLD.height / 2;
     const radius = Math.max(WORLD.width, WORLD.height) * 0.84;
-    const sectorAngle = (Math.PI * 2) / Math.max(1, config.sectors);
     const fillAlpha = state.phase === 'overload' ? 0.14 : 0.07 + Math.sin(time / 90) * 0.018;
     const lineAlpha = state.phase === 'overload' ? 0.52 : 0.36;
 
     state.dangerousSectors.forEach((sector) => {
-      const start = sector * sectorAngle - Math.PI / 2;
-      const end = start + sectorAngle;
+      const { start, end } = getArenaSectorBounds(sector, config.sectors);
       this.foregroundFx.fillStyle(theme.hazard, fillAlpha);
       this.foregroundFx.beginPath();
       this.foregroundFx.moveTo(centerX, centerY);
@@ -444,8 +445,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.nextOverloadDamageAt = time + this.stage.arenaShift.damageCooldownMs;
     this.overloadHits += 1;
-    playtestTelemetry.recordOverloadHit(this.elapsedSeconds);
-    this.damagePlayer(this.stage.arenaShift.damage);
+    const damageTaken = this.damagePlayer(this.stage.arenaShift.damage);
+    this.overloadDamageTaken += damageTaken;
+    playtestTelemetry.recordOverloadHit(this.elapsedSeconds, damageTaken);
     this.createBurst(this.player.x, this.player.y, this.stage.visualTheme.hazard, 6, 'danger-spark');
   }
 
@@ -1268,7 +1270,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private damagePlayer(rawDamage: number): void {
+  private damagePlayer(rawDamage: number): number {
     const damage = Math.max(1, rawDamage - this.stats.armor);
     this.stats.currentHealth -= damage;
     this.damageTaken += damage;
@@ -1280,6 +1282,7 @@ export class GameScene extends Phaser.Scene {
     if (this.stats.currentHealth <= 0) {
       this.finishRun(false);
     }
+    return damage;
   }
 
   private dropXp(x: number, y: number, value: number): void {
@@ -2041,6 +2044,7 @@ export class GameScene extends Phaser.Scene {
       arenaShifts: this.arenaShifts,
       overloadEvents: this.overloadEvents,
       overloadHits: this.overloadHits,
+      overloadDamageTaken: this.overloadDamageTaken,
     };
     const chapter = getChapterForStage(this.stage.id);
     const clearedStageIds = new Set([...this.save.clearedStageIds, this.stage.id]);

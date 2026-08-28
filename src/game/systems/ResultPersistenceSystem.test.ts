@@ -20,6 +20,7 @@ const baseResult: RunResult = {
   arenaShifts: 0,
   overloadEvents: 0,
   overloadHits: 0,
+  overloadDamageTaken: 0,
 };
 
 describe('persistResultAndMaybeSendScore', () => {

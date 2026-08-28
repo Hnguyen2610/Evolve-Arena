@@ -65,6 +65,7 @@ export interface PlaytestRunTelemetry {
   arenaShifts: number;
   overloadEvents: number;
   overloadHits: number;
+  overloadDamageTaken: number;
   damageTaken: number;
   remainingHp: number | null;
   maxHp: number | null;
@@ -189,6 +190,7 @@ export class PlaytestTelemetryService {
       arenaShifts: 0,
       overloadEvents: 0,
       overloadHits: 0,
+      overloadDamageTaken: 0,
       damageTaken: 0,
       remainingHp: null,
       maxHp: null,
@@ -304,28 +306,36 @@ export class PlaytestTelemetryService {
     this.recordEvent('energy_node_pressure_hit', seconds);
   }
 
-  recordArenaShift(phase: string, seconds: number): void {
+  recordArenaShift(phase: string, seconds: number, dangerousSectors: number[] = [], cycleIndex = -1): void {
     if (!this.currentRun) {
       return;
     }
     this.currentRun.arenaShifts += 1;
-    this.recordEvent('arena_shift', seconds, { phase });
+    this.recordEvent('arena_shift', seconds, {
+      phase,
+      cycleIndex,
+      dangerousSectors: dangerousSectors.join(','),
+    });
   }
 
-  recordOverloadStarted(seconds: number): void {
+  recordOverloadStarted(seconds: number, dangerousSectors: number[] = [], cycleIndex = -1): void {
     if (!this.currentRun) {
       return;
     }
     this.currentRun.overloadEvents += 1;
-    this.recordEvent('overload_started', seconds);
+    this.recordEvent('overload_started', seconds, {
+      cycleIndex,
+      dangerousSectors: dangerousSectors.join(','),
+    });
   }
 
-  recordOverloadHit(seconds: number): void {
+  recordOverloadHit(seconds: number, damageTaken = 0): void {
     if (!this.currentRun) {
       return;
     }
     this.currentRun.overloadHits += 1;
-    this.recordEvent('overload_hit', seconds);
+    this.currentRun.overloadDamageTaken += Math.max(0, damageTaken);
+    this.recordEvent('overload_hit', seconds, { damageTaken: roundSeconds(damageTaken) });
   }
 
   recordChapterCompleted(chapterId: ChapterId, seconds: number): void {
@@ -380,6 +390,7 @@ export class PlaytestTelemetryService {
     this.currentRun.arenaShifts = input.result.arenaShifts;
     this.currentRun.overloadEvents = input.result.overloadEvents;
     this.currentRun.overloadHits = input.result.overloadHits;
+    this.currentRun.overloadDamageTaken = input.result.overloadDamageTaken;
     this.currentRun.bossDefeated = input.result.bossDefeated;
     this.currentRun.remainingHp = roundSeconds(input.remainingHp);
     this.currentRun.maxHp = roundSeconds(input.maxHp);

@@ -19,6 +19,7 @@ const result: RunResult = {
   arenaShifts: 0,
   overloadEvents: 0,
   overloadHits: 0,
+  overloadDamageTaken: 0,
 };
 
 function createService(): PlaytestTelemetryService {
@@ -65,14 +66,32 @@ describe('PlaytestTelemetryService', () => {
   it('records arena overload metrics for stage 4 QA', () => {
     const telemetry = createService();
     telemetry.beginRun('new', 'stage-4', 'chapter-2');
-    telemetry.recordArenaShift('warning', 22.1);
-    telemetry.recordOverloadStarted(23.4);
-    telemetry.recordOverloadHit(24.2);
+    telemetry.recordArenaShift('warning', 22.1, [1, 3], 0);
+    telemetry.recordOverloadStarted(23.4, [1, 3], 0);
+    telemetry.recordOverloadHit(24.2, 8.6);
 
     expect(telemetry.getCurrentRun()).toMatchObject({
       arenaShifts: 1,
       overloadEvents: 1,
       overloadHits: 1,
+      overloadDamageTaken: 8.6,
+    });
+    expect(telemetry.getCurrentRun()?.events).toEqual(expect.arrayContaining([
+      {
+        name: 'arena_shift',
+        atSeconds: 22.1,
+        payload: { phase: 'warning', cycleIndex: 0, dangerousSectors: '1,3' },
+      },
+      {
+        name: 'overload_started',
+        atSeconds: 23.4,
+        payload: { cycleIndex: 0, dangerousSectors: '1,3' },
+      },
+    ]));
+    expect(telemetry.getCurrentRun()?.events).toContainEqual({
+      name: 'overload_hit',
+      atSeconds: 24.2,
+      payload: { damageTaken: 8.6 },
     });
   });
 

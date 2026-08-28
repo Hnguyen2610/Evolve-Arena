@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StageArenaShiftConfig } from '../types';
 import {
+  getArenaSectorBounds,
   getArenaSectorForPoint,
   getArenaShiftState,
   isSectorDangerous,
@@ -60,5 +61,24 @@ describe('ArenaStateSystem', () => {
   it('maps world points to the expected arena sector', () => {
     expect(getArenaSectorForPoint(200, 100, 100, 100, 6)).toBe(0);
     expect(getArenaSectorForPoint(100, 200, 100, 100, 6)).toBe(1);
+  });
+
+  it('keeps rendered sector wedges aligned with damage sector mapping', () => {
+    const centerX = 100;
+    const centerY = 100;
+    const radius = 80;
+
+    for (let sector = 0; sector < config.sectors; sector += 1) {
+      const bounds = getArenaSectorBounds(sector, config.sectors);
+      const midpoint = (bounds.start + bounds.end) / 2;
+
+      expect(getArenaSectorForPoint(
+        centerX + Math.cos(midpoint) * radius,
+        centerY + Math.sin(midpoint) * radius,
+        centerX,
+        centerY,
+        config.sectors,
+      )).toBe(sector);
+    }
   });
 });

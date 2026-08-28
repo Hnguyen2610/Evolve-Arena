@@ -152,6 +152,7 @@ export interface RunResult {
   arenaShifts: number;
   overloadEvents: number;
   overloadHits: number;
+  overloadDamageTaken: number;
 }
 
 export interface StageVisualTheme {

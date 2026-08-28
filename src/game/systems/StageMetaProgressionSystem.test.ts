@@ -26,6 +26,7 @@ function result(input: Partial<RunResult> & { stageId?: StageId } = {}): RunResu
     arenaShifts: input.arenaShifts ?? 0,
     overloadEvents: input.overloadEvents ?? 0,
     overloadHits: input.overloadHits ?? 0,
+    overloadDamageTaken: input.overloadDamageTaken ?? 0,
   };
 }
 
