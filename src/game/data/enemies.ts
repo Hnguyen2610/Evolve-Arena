@@ -109,6 +109,30 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     tint: 0xffd166,
     behavior: 'disruptor',
   },
+  anchor: {
+    type: 'anchor',
+    name: 'Anchor',
+    health: 58,
+    speed: 58,
+    damage: 7,
+    xp: 25,
+    score: 36,
+    radius: 19,
+    tint: 0x8ff7ff,
+    behavior: 'anchor',
+  },
+  interceptor: {
+    type: 'interceptor',
+    name: 'Interceptor',
+    health: 36,
+    speed: 112,
+    damage: 6,
+    xp: 21,
+    score: 32,
+    radius: 16,
+    tint: 0xff8d32,
+    behavior: 'interceptor',
+  },
   'energy-node': {
     type: 'energy-node',
     name: 'Energy Node',
@@ -157,6 +181,18 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     tint: 0xffa53d,
     behavior: 'boss',
   },
+  'grid-boss': {
+    type: 'grid-boss',
+    name: 'Grid Sentinel',
+    health: 690,
+    speed: 70,
+    damage: 12,
+    xp: 195,
+    score: 1260,
+    radius: 56,
+    tint: 0x5ee7ff,
+    behavior: 'boss',
+  },
 };
 
 export const STANDARD_ENEMY_TYPES: EnemyType[] = [
@@ -169,4 +205,6 @@ export const STANDARD_ENEMY_TYPES: EnemyType[] = [
   'pulse-caster',
   'guardian',
   'disruptor',
+  'anchor',
+  'interceptor',
 ];

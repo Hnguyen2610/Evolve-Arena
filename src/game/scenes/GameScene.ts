@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BOSS_BALANCE, calculateProjectileVolleyDamageScale, createPlayerStats } from '../config/balance';
 import { GAME_TIMING, UI_DEPTH, WORLD } from '../config/constants';
 import { COLORS, cssColor } from '../config/visual';
+import { getChapterForStage } from '../data/chapters';
 import { ENEMY_DEFINITIONS } from '../data/enemies';
 import { DEFAULT_STAGE_ID, getStageDefinition, isStageId } from '../data/stages';
 import { Enemy } from '../entities/Enemy';
@@ -22,6 +23,14 @@ import { addXp } from '../systems/LevelSystem';
 import { calculateCoins, calculateScoreBonus } from '../systems/ScoreSystem';
 import { applyUpgrade, pickUpgradeOptions } from '../systems/UpgradeSystem';
 import { isStageUnlocked } from '../systems/StageProgressionSystem';
+import {
+  getArenaSectorForPoint,
+  getArenaShiftState,
+  isSectorDangerous,
+  type ArenaShiftPhase,
+  type ArenaShiftState,
+  type ForcedArenaShift,
+} from '../systems/ArenaStateSystem';
 import type {
   EnemyDefinition,
   EnemyRuntimeData,
@@ -111,6 +120,13 @@ export class GameScene extends Phaser.Scene {
   private damageTaken = 0;
   private energyNodesDestroyed = 0;
   private energyNodePressureHits = 0;
+  private arenaShiftPhase: ArenaShiftPhase = 'stable';
+  private arenaShiftCycleIndex = -1;
+  private forcedArenaShift: ForcedArenaShift | null = null;
+  private nextOverloadDamageAt = 0;
+  private arenaShifts = 0;
+  private overloadEvents = 0;
+  private overloadHits = 0;
 
   constructor() {
     super('GameScene');
@@ -180,6 +196,13 @@ export class GameScene extends Phaser.Scene {
     this.damageTaken = 0;
     this.energyNodesDestroyed = 0;
     this.energyNodePressureHits = 0;
+    this.arenaShiftPhase = 'stable';
+    this.arenaShiftCycleIndex = -1;
+    this.forcedArenaShift = null;
+    this.nextOverloadDamageAt = 0;
+    this.arenaShifts = 0;
+    this.overloadEvents = 0;
+    this.overloadHits = 0;
     this.stageHazards.forEach((hazard) => {
       hazard.zone.destroy();
       hazard.core.destroy();
@@ -195,6 +218,7 @@ export class GameScene extends Phaser.Scene {
     const deltaSeconds = delta / 1000;
     this.elapsedSeconds += deltaSeconds;
     this.updateArenaVisuals(time);
+    this.updateArenaShift(time);
     this.updatePlayer();
     this.updateSpawning(time);
     this.updateEnemies(time, deltaSeconds);
@@ -336,6 +360,110 @@ export class GameScene extends Phaser.Scene {
       this.nextAmbientSparkAt = time + Math.max(260, 680 - phase * 130);
       this.createAmbientSpark(color, phase);
     }
+  }
+
+  private updateArenaShift(time: number): void {
+    const config = this.stage.arenaShift;
+    const state = getArenaShiftState(config, this.elapsedSeconds, this.forcedArenaShift);
+    this.clearExpiredForcedArenaShift();
+
+    if (state.enabled && (state.phase !== this.arenaShiftPhase || state.cycleIndex !== this.arenaShiftCycleIndex)) {
+      if (state.phase === 'warning') {
+        this.arenaShifts += 1;
+        playtestTelemetry.recordArenaShift(state.phase, this.elapsedSeconds);
+        this.hud.showHint('Grid sectors shifting.');
+      } else if (state.phase === 'overload') {
+        this.overloadEvents += 1;
+        playtestTelemetry.recordOverloadStarted(this.elapsedSeconds);
+        this.hud.showHint('Avoid overload lanes.');
+        this.audio.play('bossAttack');
+      }
+      this.arenaShiftPhase = state.phase;
+      this.arenaShiftCycleIndex = state.cycleIndex;
+    }
+
+    this.drawArenaShiftState(state, time);
+    this.applyArenaOverloadDamage(state, time);
+  }
+
+  private clearExpiredForcedArenaShift(): void {
+    if (!this.forcedArenaShift) {
+      return;
+    }
+    const duration = this.forcedArenaShift.warningMs + this.forcedArenaShift.overloadMs + this.forcedArenaShift.recoveryMs;
+    if (this.elapsedSeconds * 1000 >= this.forcedArenaShift.startedAtMs + duration) {
+      this.forcedArenaShift = null;
+    }
+  }
+
+  private drawArenaShiftState(state: ArenaShiftState, time: number): void {
+    if (!state.enabled || state.dangerousSectors.length === 0) {
+      return;
+    }
+    const config = this.stage.arenaShift;
+    const theme = this.stage.visualTheme;
+    const centerX = WORLD.width / 2;
+    const centerY = WORLD.height / 2;
+    const radius = Math.max(WORLD.width, WORLD.height) * 0.84;
+    const sectorAngle = (Math.PI * 2) / Math.max(1, config.sectors);
+    const fillAlpha = state.phase === 'overload' ? 0.14 : 0.07 + Math.sin(time / 90) * 0.018;
+    const lineAlpha = state.phase === 'overload' ? 0.52 : 0.36;
+
+    state.dangerousSectors.forEach((sector) => {
+      const start = sector * sectorAngle - Math.PI / 2;
+      const end = start + sectorAngle;
+      this.foregroundFx.fillStyle(theme.hazard, fillAlpha);
+      this.foregroundFx.beginPath();
+      this.foregroundFx.moveTo(centerX, centerY);
+      this.foregroundFx.arc(centerX, centerY, radius, start, end, false);
+      this.foregroundFx.closePath();
+      this.foregroundFx.fillPath();
+      this.foregroundFx.lineStyle(state.phase === 'overload' ? 4 : 2, theme.hazard, lineAlpha);
+      this.foregroundFx.beginPath();
+      this.foregroundFx.moveTo(centerX, centerY);
+      this.foregroundFx.lineTo(centerX + Math.cos(start) * radius, centerY + Math.sin(start) * radius);
+      this.foregroundFx.moveTo(centerX, centerY);
+      this.foregroundFx.lineTo(centerX + Math.cos(end) * radius, centerY + Math.sin(end) * radius);
+      this.foregroundFx.strokePath();
+    });
+  }
+
+  private applyArenaOverloadDamage(state: ArenaShiftState, time: number): void {
+    if (!state.enabled || state.phase !== 'overload' || time < this.nextOverloadDamageAt) {
+      return;
+    }
+    const sector = getArenaSectorForPoint(
+      this.player.x,
+      this.player.y,
+      WORLD.width / 2,
+      WORLD.height / 2,
+      this.stage.arenaShift.sectors,
+    );
+    if (!isSectorDangerous(state, sector)) {
+      return;
+    }
+    this.nextOverloadDamageAt = time + this.stage.arenaShift.damageCooldownMs;
+    this.overloadHits += 1;
+    playtestTelemetry.recordOverloadHit(this.elapsedSeconds);
+    this.damagePlayer(this.stage.arenaShift.damage);
+    this.createBurst(this.player.x, this.player.y, this.stage.visualTheme.hazard, 6, 'danger-spark');
+  }
+
+  private forceArenaOverload(time: number, warningMs = 1150, overloadMs = 2900, recoveryMs = 1700): void {
+    if (!this.stage.arenaShift.enabled) {
+      return;
+    }
+    this.forcedArenaShift = {
+      startedAtMs: this.elapsedSeconds * 1000,
+      warningMs,
+      overloadMs,
+      recoveryMs,
+      cycleIndex: 100 + Math.floor(time / 1000),
+    };
+  }
+
+  private isArenaOverloadActive(): boolean {
+    return this.arenaShiftPhase === 'overload';
   }
 
   private getArenaVisualPhase(): number {
@@ -588,6 +716,17 @@ export class GameScene extends Phaser.Scene {
       } else if (data.behavior === 'disruptor' && time >= data.nextAttackAt && distance < 560) {
         data.nextAttackAt = time + GAME_TIMING.rangedCooldownMs + 820;
         this.fireDisruptor(enemy, direction.angle(), data.damage);
+      } else if (data.behavior === 'anchor' && time >= data.nextAttackAt && distance < 520) {
+        data.nextAttackAt = time + (this.isArenaOverloadActive() ? 1650 : 2300);
+        data.telegraphUntil = time + 380;
+        this.fireAnchorBurst(enemy, direction.angle(), data.damage, this.isArenaOverloadActive());
+      } else if (data.behavior === 'interceptor' && time >= data.nextAttackAt && distance < 560) {
+        data.nextAttackAt = time + 2600;
+        data.telegraphUntil = time + 360;
+        data.chargeUntil = time + 900;
+        enemy.setData('dashX', direction.x);
+        enemy.setData('dashY', direction.y);
+        this.showInterceptorDashTelegraph(enemy, direction.angle());
       }
 
       if (distance < data.radius + 24 && time >= data.contactReadyAt) {
@@ -646,6 +785,30 @@ export class GameScene extends Phaser.Scene {
       }
       return new Phaser.Math.Vector2(Math.sin(time / 360) * 55, Math.cos(time / 420) * 55);
     }
+    if (data.behavior === 'anchor') {
+      if (data.telegraphUntil > time) {
+        return new Phaser.Math.Vector2(0, 0);
+      }
+      if (distance < 230) {
+        return direction.clone().scale(-data.speed * 0.64);
+      }
+      if (distance > 420) {
+        return direction.clone().scale(data.speed * 0.48);
+      }
+      return new Phaser.Math.Vector2(-direction.y, direction.x).scale(data.speed * 0.22);
+    }
+    if (data.behavior === 'interceptor') {
+      if (data.telegraphUntil > time) {
+        return new Phaser.Math.Vector2(0, 0);
+      }
+      if (data.chargeUntil > time) {
+        const dashX = Number(enemy.getData('dashX')) || direction.x;
+        const dashY = Number(enemy.getData('dashY')) || direction.y;
+        return new Phaser.Math.Vector2(dashX, dashY).normalize().scale(data.speed * 2.25);
+      }
+      const strafe = new Phaser.Math.Vector2(-direction.y, direction.x).scale(Math.sin(time / 260 + enemy.x) * 0.42);
+      return direction.clone().add(strafe).normalize().scale(data.speed * 1.08);
+    }
 
     const speed = data.behavior === 'runner' ? data.speed * 1.22 : data.speed;
     return direction.clone().scale(speed);
@@ -688,6 +851,38 @@ export class GameScene extends Phaser.Scene {
         this.fireEnemyProjectile(enemy.x, enemy.y, angle + offset, 355, damage * 0.82);
       });
     });
+  }
+
+  private fireAnchorBurst(enemy: Enemy, angle: number, damage: number, overloaded: boolean): void {
+    const color = this.stage.visualTheme.hazard;
+    const ring = this.add.circle(enemy.x, enemy.y, overloaded ? 42 : 34, color, 0.1).setStrokeStyle(3, color, 0.56).setDepth(UI_DEPTH.effects);
+    this.tweens.add({
+      targets: ring,
+      scale: overloaded ? 2.1 : 1.75,
+      alpha: 0,
+      duration: 380,
+      ease: 'Sine.Out',
+      onComplete: () => ring.destroy(),
+    });
+    this.time.delayedCall(300, () => {
+      if (!enemy.active || this.mode !== 'playing') {
+        return;
+      }
+      const offsets = overloaded ? [-0.44, -0.18, 0.18, 0.44] : [-0.28, 0, 0.28];
+      offsets.forEach((offset) => {
+        this.fireEnemyProjectile(enemy.x, enemy.y, angle + offset, overloaded ? 315 : 285, damage * (overloaded ? 0.58 : 0.68));
+      });
+    });
+  }
+
+  private showInterceptorDashTelegraph(enemy: Enemy, angle: number): void {
+    const color = this.stage.visualTheme.phase3;
+    const line = this.add.rectangle(enemy.x, enemy.y, 330, 18, color, 0.13).setDepth(UI_DEPTH.effects);
+    line.setStrokeStyle(2, color, 0.48);
+    line.rotation = angle;
+    const core = this.add.circle(enemy.x, enemy.y, 18, color, 0.18).setStrokeStyle(2, this.stage.visualTheme.foreground, 0.42).setDepth(UI_DEPTH.effects);
+    this.tweens.add({ targets: line, alpha: 0, duration: 360, ease: 'Sine.Out', onComplete: () => line.destroy() });
+    this.tweens.add({ targets: core, scale: 1.8, alpha: 0, duration: 360, ease: 'Sine.Out', onComplete: () => core.destroy() });
   }
 
   private updateEnergyNodes(time: number): void {
@@ -1471,6 +1666,11 @@ export class GameScene extends Phaser.Scene {
         Phaser.Math.Clamp(this.boss.y + offset.y, 110, WORLD.height - 110),
       ));
     }
+    if (data.type === 'grid-boss' && time >= this.nextBossSupportNodeAt) {
+      this.nextBossSupportNodeAt = time + 8200;
+      this.forceArenaOverload(time, 1050, 3000, 1600);
+      this.fireGridBossLane(direction.angle());
+    }
 
     if (this.bossRadialRing?.active) {
       this.bossRadialRing.setPosition(this.boss.x, this.boss.y);
@@ -1557,22 +1757,54 @@ export class GameScene extends Phaser.Scene {
     }
     const riftBoss = this.boss.dataModel.type === 'rift-boss';
     const forgeBoss = this.boss.dataModel.type === 'forge-boss';
-    const projectileCount = riftBoss ? 14 : forgeBoss ? 10 : 12;
-    const offset = riftBoss ? this.time.now / 800 : forgeBoss ? Math.PI / 10 : 0;
+    const gridBoss = this.boss.dataModel.type === 'grid-boss';
+    const projectileCount = riftBoss ? 14 : gridBoss ? 8 : forgeBoss ? 10 : 12;
+    const offset = riftBoss ? this.time.now / 800 : gridBoss ? this.time.now / 1100 : forgeBoss ? Math.PI / 10 : 0;
     for (let i = 0; i < projectileCount; i += 1) {
       const angle = offset + (Math.PI * 2 * i) / projectileCount;
       this.fireEnemyProjectile(
         this.boss.x,
         this.boss.y,
         angle,
-        riftBoss ? 270 : forgeBoss ? 250 : 245,
-        this.boss.dataModel.damage * (riftBoss ? 0.64 : forgeBoss ? 0.66 : 0.72),
+        riftBoss ? 270 : gridBoss ? 285 : forgeBoss ? 250 : 245,
+        this.boss.dataModel.damage * (riftBoss ? 0.64 : gridBoss ? 0.6 : forgeBoss ? 0.66 : 0.72),
         'boss',
       );
     }
     if (riftBoss && this.stage.hazard.enabled) {
       this.spawnStageHazard(this.time.now);
     }
+    if (gridBoss) {
+      this.forceArenaOverload(this.time.now, 1000, 2600, 1500);
+    }
+  }
+
+  private fireGridBossLane(angle: number): void {
+    if (!this.boss?.active) {
+      return;
+    }
+    const color = this.stage.visualTheme.bossDanger;
+    const lanes = [-0.2, 0.2].map((offset) => {
+      const lane = this.add.rectangle(this.boss?.x ?? 0, this.boss?.y ?? 0, 560, 26, color, 0.14).setDepth(UI_DEPTH.effects);
+      lane.setStrokeStyle(2, color, 0.45);
+      lane.rotation = angle + offset;
+      return lane;
+    });
+    this.tweens.add({
+      targets: lanes,
+      alpha: 0,
+      duration: 520,
+      ease: 'Sine.Out',
+      onComplete: () => lanes.forEach((lane) => lane.destroy()),
+    });
+    this.time.delayedCall(410, () => {
+      if (!this.boss?.active || this.mode !== 'playing') {
+        return;
+      }
+      [-0.2, 0.2].forEach((offset) => {
+        this.fireEnemyProjectile(this.boss?.x ?? 0, this.boss?.y ?? 0, angle + offset, 360, this.boss?.dataModel.damage ?? 12, 'boss');
+      });
+    });
   }
 
   private showDamage(x: number, y: number, amount: number, color: string, critical = false): void {
@@ -1738,7 +1970,7 @@ export class GameScene extends Phaser.Scene {
     banner.setStrokeStyle(2, theme.boss, 0.5);
     const text = this.add
       .text(this.scale.width / 2, y, 'BOSS INCOMING', {
-        color: this.stage.id === 'stage-2' ? '#f9e8ff' : '#fff5a8',
+        color: cssColor(this.stage.visualTheme.foreground),
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: this.scale.width < 520 || shortLandscape ? '18px' : '24px',
         fontStyle: '900',
@@ -1806,8 +2038,16 @@ export class GameScene extends Phaser.Scene {
       damageTaken: this.damageTaken,
       energyNodesDestroyed: this.energyNodesDestroyed,
       energyNodePressureHits: this.energyNodePressureHits,
+      arenaShifts: this.arenaShifts,
+      overloadEvents: this.overloadEvents,
+      overloadHits: this.overloadHits,
     };
-    if (victory && this.stage.id === 'stage-3' && !this.save.clearedChapterIds.includes(this.stage.chapterId)) {
+    const chapter = getChapterForStage(this.stage.id);
+    const clearedStageIds = new Set([...this.save.clearedStageIds, this.stage.id]);
+    const chapterCompleted = chapter.completeWhenAllStagesCleared
+      && chapter.stageIds.every((stageId) => clearedStageIds.has(stageId))
+      && !this.save.clearedChapterIds.includes(chapter.id);
+    if (victory && chapterCompleted) {
       playtestTelemetry.recordChapterCompleted(this.stage.chapterId, this.elapsedSeconds);
     }
     playtestTelemetry.completeRun({

@@ -4,7 +4,7 @@ Evolve Arena is a Phaser 3 hybrid-casual survival action game: move, auto-attack
 
 ## Gameplay Loop
 
-Move through Chapter 1 arenas, survive enemy waves, collect XP orbs, level up, choose one of three upgrades, fight elites, defeat the stage boss, earn first-clear rewards, and spend coins on permanent upgrades.
+Move through Chapter 1 arenas and the first Chapter 2 vertical slice, survive enemy waves, collect XP orbs, level up, choose one of three upgrades, fight elites, defeat the stage boss, earn first-clear rewards, and spend coins on permanent upgrades.
 
 ## Stack
 
@@ -50,20 +50,21 @@ npm run audit:playables
 
 ## Implemented MVP Features
 
-- Stage Select with Chapter 1 progression across three stages
+- Stage Select with Chapter 1 progression across three stages and an in-progress Chapter 2 tab
 - Stage 1: Neon Core arena with the original Apex Core boss encounter
 - Stage 2: Rift Nexus arena with rift hazards, Orbiter enemies, Pulse Casters, and the Prism Warden boss
 - Stage 3: Core Forge arena with Energy Nodes, Guardians, Disruptors, and the Forge Tyrant chapter boss
+- Stage 4: Overload Grid arena with shifting overload sectors, Anchor enemies, Interceptors, and the Grid Sentinel boss
 - One playable character
-- Nine standard enemy types: Basic, Runner, Tank, Ranged, Swarm, Orbiter, Pulse Caster, Guardian, Disruptor
+- Eleven standard enemy types: Basic, Runner, Tank, Ranged, Swarm, Orbiter, Pulse Caster, Guardian, Disruptor, Anchor, Interceptor
 - Elite enemy variants
-- Stage-aware boss encounters with charge, radial projectile, rift pressure, and controlled support-node patterns
+- Stage-aware boss encounters with charge, radial projectile, rift pressure, controlled support-node patterns, and overload-grid pressure
 - Auto-targeting projectile combat
 - Player health, armor mitigation, enemy contact damage, and enemy projectiles
 - XP drops, XP magnet attraction, level progression, and upgrade selection
 - 16 temporary upgrades including damage, attack speed, movement, health, magnet, extra shots, piercing, crits, explosions, lifesteal, armor, and knockback
 - Score, kills, elite kills, survival bonus, boss reward, coins, and best score
-- One-time stage first-clear rewards, Chapter 1 completion reward, and permanent meta upgrades for damage, health, and movement speed
+- One-time stage first-clear rewards, Chapter 1 completion reward, Chapter 2 Stage 4 first-clear reward, and permanent meta upgrades for damage, health, and movement speed
 - Game over, victory, replay, and upgrade menu
 - Procedural Phaser textures, hit flashes, bursts, floating damage, camera shake, and boss telegraphs
 

@@ -1,6 +1,6 @@
 import { SAVE_KEY, SAVE_VERSION } from '../config/constants';
 import { PERMANENT_UPGRADE_BALANCE } from '../config/balance';
-import { CHAPTER_IDS } from '../data/chapters';
+import { CHAPTER_DEFINITIONS, CHAPTER_IDS } from '../data/chapters';
 import { DEFAULT_SAVE_DATA } from '../data/progression';
 import { DEFAULT_STAGE_ID, STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
 import { normalizeStageMasteryState, normalizeStageRecordsState } from '../systems/StageMetaProgressionSystem';
@@ -95,6 +95,7 @@ export function normalizeSaveData(input: unknown): GameSaveData {
 
   const permanent = isRecord(input.permanentUpgrades) ? input.permanentUpgrades : {};
   const clearedStageIds = normalizeStageIds(input.clearedStageIds, []);
+  const clearedChapterIds = normalizeChapterIds(input.clearedChapterIds, []);
   return {
     version: SAVE_VERSION,
     bestScore: safeNonNegativeInt(input.bestScore),
@@ -104,9 +105,13 @@ export function normalizeSaveData(input: unknown): GameSaveData {
       health: safeUpgradeLevel('health', permanent.health),
       speed: safeUpgradeLevel('speed', permanent.speed),
     },
-    unlockedStageIds: deriveUnlockedStageIds(normalizeStageIds(input.unlockedStageIds, [DEFAULT_STAGE_ID]), clearedStageIds),
+    unlockedStageIds: deriveUnlockedStageIds(
+      normalizeStageIds(input.unlockedStageIds, [DEFAULT_STAGE_ID]),
+      clearedStageIds,
+      clearedChapterIds,
+    ),
     clearedStageIds,
-    clearedChapterIds: normalizeChapterIds(input.clearedChapterIds, []),
+    clearedChapterIds,
     stageMastery: normalizeStageMasteryState(input.stageMastery, clearedStageIds),
     stageRecords: normalizeStageRecordsState(input.stageRecords),
   };
@@ -149,12 +154,23 @@ function normalizeChapterIds(value: unknown, fallback: ChapterId[]): ChapterId[]
   return CHAPTER_IDS.filter((chapterId) => source.includes(chapterId));
 }
 
-function deriveUnlockedStageIds(unlockedStageIds: StageId[], clearedStageIds: StageId[]): StageId[] {
+function deriveUnlockedStageIds(
+  unlockedStageIds: StageId[],
+  clearedStageIds: StageId[],
+  clearedChapterIds: ChapterId[],
+): StageId[] {
   let derived = [...unlockedStageIds];
   clearedStageIds.forEach((stageId) => {
     const nextStageId = STAGE_DEFINITIONS[stageId].unlocksOnClear;
     if (nextStageId) {
       derived = STAGE_IDS.filter((candidate) => candidate === nextStageId || derived.includes(candidate));
+    }
+  });
+  CHAPTER_IDS.forEach((chapterId) => {
+    const chapter = CHAPTER_DEFINITIONS[chapterId];
+    const firstStageId = chapter.stageIds[0];
+    if (firstStageId && chapter.unlocksAfterChapterId && clearedChapterIds.includes(chapter.unlocksAfterChapterId)) {
+      derived = STAGE_IDS.filter((candidate) => candidate === firstStageId || derived.includes(candidate));
     }
   });
   return derived;

@@ -55,6 +55,8 @@ export const ENEMY_COLORS = {
   'pulse-caster': { fill: 0xff4fd8, core: 0xffd7f6, stroke: 0x4a123f },
   guardian: { fill: 0x27586b, core: 0xd4fbff, stroke: 0x102d3a },
   disruptor: { fill: 0xffa53d, core: 0xfff1b8, stroke: 0x4a2607 },
+  anchor: { fill: 0x114c68, core: 0xe8feff, stroke: 0x062234 },
+  interceptor: { fill: 0xff8d32, core: 0xfff4cf, stroke: 0x552207 },
   'energy-node': { fill: 0xffd166, core: 0xffffff, stroke: 0x53330d },
 };
 

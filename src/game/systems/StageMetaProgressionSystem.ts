@@ -64,6 +64,12 @@ export const STAGE_MASTERY_RULES: Record<StageId, StageMasteryRule> = {
     performanceRequirement: 'destroy 3 Energy Nodes and take 4 or fewer node pressure hits',
     meetsPerformanceTarget: (result) => result.energyNodesDestroyed >= 3 && result.energyNodePressureHits <= 4,
   },
+  'stage-4': {
+    identity: 'ADAPT',
+    timeTargetSeconds: 114,
+    performanceRequirement: 'take 3 or fewer overload hits',
+    meetsPerformanceTarget: (result) => result.overloadEvents >= 2 && result.overloadHits <= 3,
+  },
 };
 
 export function evaluateStageMastery(result: RunResult): StageMasteryEvaluation {
@@ -135,7 +141,7 @@ export function getChapterMasterySummary(save: GameSaveData, chapterId: ChapterI
   return {
     earnedStars,
     maxStars,
-    mastered: earnedStars === maxStars,
+    mastered: chapter.completeWhenAllStagesCleared && earnedStars === maxStars,
   };
 }
 

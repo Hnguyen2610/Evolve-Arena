@@ -21,4 +21,11 @@ describe('DifficultySystem', () => {
     expect(getDifficulty(58, 1, 'stage-1').enemyTypes).not.toContain('guardian');
     expect(getDifficulty(58, 1, 'stage-2').enemyTypes).not.toContain('disruptor');
   });
+
+  it('introduces stage 4 anchor and interceptor pressure without changing chapter 1 stages', () => {
+    expect(getDifficulty(40, 1, 'stage-4').enemyTypes).toContain('anchor');
+    expect(getDifficulty(56, 1, 'stage-4').enemyTypes).toContain('interceptor');
+    expect(getDifficulty(70, 1, 'stage-1').enemyTypes).not.toContain('anchor');
+    expect(getDifficulty(70, 1, 'stage-3').enemyTypes).not.toContain('interceptor');
+  });
 });

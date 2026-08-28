@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS } from '../config/visual';
-import { CHAPTER_DEFINITIONS, CHAPTER_IDS } from '../data/chapters';
+import { CHAPTER_DEFINITIONS, CHAPTER_IDS, isChapterId } from '../data/chapters';
 import { STAGE_DEFINITIONS, STAGE_IDS } from '../data/stages';
-import { getClearedChapterIds, getClearedStageIds, isStageUnlocked } from '../systems/StageProgressionSystem';
+import { getClearedChapterIds, getClearedStageIds, isChapterAvailable, isStageUnlocked } from '../systems/StageProgressionSystem';
 import {
   formatClearTime,
   formatMasteryStars,
@@ -11,14 +11,16 @@ import {
   getStageMasteryObjective,
   getStageRecord,
 } from '../systems/StageMetaProgressionSystem';
-import type { GameSaveData, StageDefinition, StageRecord } from '../types';
+import type { ChapterId, GameSaveData, StageDefinition, StageRecord } from '../types';
 
 interface StageSelectSceneData {
   save: GameSaveData;
+  chapterId?: ChapterId;
 }
 
 export class StageSelectScene extends Phaser.Scene {
   private save!: GameSaveData;
+  private selectedChapterId: ChapterId = 'chapter-1';
   private nodes: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
@@ -27,6 +29,7 @@ export class StageSelectScene extends Phaser.Scene {
 
   init(data: StageSelectSceneData): void {
     this.save = data.save;
+    this.selectedChapterId = isChapterId(data.chapterId) ? data.chapterId : this.getDefaultChapterId();
   }
 
   create(): void {
@@ -44,10 +47,10 @@ export class StageSelectScene extends Phaser.Scene {
     const shortLandscape = width > height && height < 520;
     this.addBackdrop(width, height);
 
-    const titleY = shortLandscape ? 34 : Math.max(72, height * 0.1);
+    const titleY = shortLandscape ? 30 : Math.max(66, height * 0.085);
     this.addNode(
       this.add
-        .text(width / 2, titleY, 'CHAPTER 1', {
+        .text(width / 2, titleY, 'STAGE SELECT', {
           color: '#f7fbff',
           fontFamily: 'Arial Black, Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '28px' : `${Math.min(44, Math.max(32, width * 0.06))}px`,
@@ -57,38 +60,47 @@ export class StageSelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
-    const chapter = CHAPTER_DEFINITIONS[CHAPTER_IDS[0]];
+
+    this.addChapterTabs(width, titleY + (shortLandscape ? 34 : 50), shortLandscape);
+
+    const chapter = CHAPTER_DEFINITIONS[this.selectedChapterId];
     const chapterCleared = getClearedChapterIds(this.save).includes(chapter.id);
+    const chapterAvailable = isChapterAvailable(this.save, chapter.id);
     const chapterMastery = getChapterMasterySummary(this.save, chapter.id);
-    const chapterStatus = chapterMastery.mastered
-      ? 'CHAPTER MASTERED'
-      : chapterCleared
-        ? `COMPLETE  |  MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} ★`
-        : `MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} ★  |  ${chapter.subtitle}`;
+    const chapterStatus = !chapterAvailable
+      ? 'LOCKED  |  CLEAR CHAPTER 1'
+      : !chapter.completeWhenAllStagesCleared
+        ? `IN PROGRESS  |  MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} *`
+        : chapterMastery.mastered
+          ? 'CHAPTER MASTERED'
+          : chapterCleared
+            ? `COMPLETE  |  MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} *`
+            : `MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} *  |  ${chapter.subtitle}`;
     this.addNode(
       this.add
-        .text(width / 2, titleY + (shortLandscape ? 30 : 42), `${chapter.name.toUpperCase()}  |  ${chapterStatus}`, {
-          color: chapterMastery.mastered ? '#fff5a8' : chapterCleared ? '#9ff7db' : '#d7edff',
+        .text(width / 2, titleY + (shortLandscape ? 66 : 88), `CHAPTER ${chapter.number}: ${chapter.name.toUpperCase()}  |  ${chapterStatus}`, {
+          color: chapterAvailable ? (chapterCleared ? '#9ff7db' : '#d7edff') : '#8ea0bc',
           fontFamily: 'Arial, Helvetica, sans-serif',
           fontSize: shortLandscape ? '12px' : '14px',
           fontStyle: '900',
           align: 'center',
-          wordWrap: { width: Math.min(width - 44, 620) },
+          wordWrap: { width: Math.min(width - 44, 680) },
         })
         .setOrigin(0.5),
     );
 
     const clearedIds = getClearedStageIds(this.save);
-    const cardWidth = shortLandscape ? Math.min(262, (width - 96) / 3) : Math.min(420, width - 42);
+    const stages = chapter.stageIds;
+    const cardWidth = shortLandscape ? Math.min(262, (width - 96) / Math.max(1, stages.length)) : Math.min(420, width - 42);
     const cardHeight = shortLandscape ? 166 : 154;
-    const startY = shortLandscape ? height * 0.56 : titleY + 132;
+    const startY = shortLandscape ? height * 0.62 : titleY + 154;
     const gap = shortLandscape ? cardWidth + 20 : cardHeight + 16;
 
-    STAGE_IDS.forEach((stageId, index) => {
+    stages.forEach((stageId, index) => {
       const stage = STAGE_DEFINITIONS[stageId];
-      const x = shortLandscape ? width / 2 + (index - 1) * gap : width / 2;
+      const x = shortLandscape ? width / 2 + (index - (stages.length - 1) / 2) * gap : width / 2;
       const y = shortLandscape ? startY : startY + index * gap;
-      const unlocked = isStageUnlocked(this.save, stageId);
+      const unlocked = chapterAvailable && isStageUnlocked(this.save, stageId);
       const cleared = clearedIds.includes(stageId);
       this.addNode(this.createStageCard(stage, x, y, cardWidth, cardHeight, unlocked, cleared, shortLandscape));
     });
@@ -99,6 +111,25 @@ export class StageSelectScene extends Phaser.Scene {
         this.scene.start('MenuScene', { save: this.save });
       }, false),
     );
+  }
+
+  private addChapterTabs(width: number, y: number, shortLandscape: boolean): void {
+    const tabWidth = shortLandscape ? 124 : Math.min(170, (width - 64) / CHAPTER_IDS.length);
+    const tabHeight = shortLandscape ? 28 : 34;
+    const gap = tabWidth + 10;
+    CHAPTER_IDS.forEach((chapterId, index) => {
+      const chapter = CHAPTER_DEFINITIONS[chapterId];
+      const available = isChapterAvailable(this.save, chapterId);
+      const selected = chapterId === this.selectedChapterId;
+      const x = width / 2 + (index - (CHAPTER_IDS.length - 1) / 2) * gap;
+      const label = `CH ${chapter.number}${available ? '' : ' LOCKED'}`;
+      const tab = this.createButton(x, y, tabWidth, tabHeight, label, () => {
+        this.selectedChapterId = chapterId;
+        this.render();
+      }, selected && available);
+      tab.setAlpha(available ? 1 : 0.58);
+      this.addNode(tab);
+    });
   }
 
   private createStageCard(
@@ -143,21 +174,21 @@ export class StageSelectScene extends Phaser.Scene {
         fontStyle: '800',
       })
       .setOrigin(0, 0.5);
-    const lockMessage = stage.id === 'stage-3' ? 'Clear Stage 2 to unlock.' : 'Clear Stage 1 to unlock.';
-    const description = this.add
-      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 96 : 95), unlocked ? stage.description : lockMessage, {
-        color: unlocked ? COLORS.uiTextMuted : '#7f8ba3',
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: shortLandscape ? '11px' : '12px',
-        fontStyle: '700',
-        wordWrap: { width: width - 44 },
-      })
-      .setOrigin(0, 0);
+    const lockMessage = this.getStageLockMessage(stage);
     const mastery = unlocked ? getStageMastery(this.save, stage.id) : 0;
     const record = unlocked ? getStageRecord(this.save, stage.id) : { bestScore: 0 };
     const objective = getStageMasteryObjective(stage.id);
     const nextGoal = this.getNextMasteryGoal(mastery, objective, shortLandscape);
     const statusText = !unlocked ? 'LOCKED' : mastery >= 3 ? 'MASTERED' : cleared ? 'IMPROVE' : 'READY';
+    const description = this.add
+      .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 96 : 95), unlocked ? objective.identity : lockMessage, {
+        color: unlocked ? COLORS.uiTextMuted : '#7f8ba3',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '10px' : '11px',
+        fontStyle: '700',
+        wordWrap: { width: width - 44 },
+      })
+      .setOrigin(0, 0);
     const status = this.add
       .text(width / 2 - 22, height / 2 - 20, statusText, {
         color: cleared ? '#9ff7db' : unlocked ? '#f7fbff' : '#7f8ba3',
@@ -192,9 +223,6 @@ export class StageSelectScene extends Phaser.Scene {
         wordWrap: { width: width - 44 },
       })
       .setOrigin(0, 0.5);
-
-    description.setText(unlocked ? objective.identity : lockMessage);
-    description.setFontSize(shortLandscape ? 10 : 11);
 
     const card = this.add.container(x, y, [shadow, bg, band, badge, number, title, subtitle, description, stars, records, goal, status]);
     if (unlocked) {
@@ -234,20 +262,35 @@ export class StageSelectScene extends Phaser.Scene {
     return this.add.container(x, y, [shadow, bg, text]);
   }
 
+  private getDefaultChapterId(): ChapterId {
+    return [...CHAPTER_IDS].reverse().find((chapterId) => isChapterAvailable(this.save, chapterId)) ?? 'chapter-1';
+  }
+
+  private getStageLockMessage(stage: StageDefinition): string {
+    if (stage.chapterId === 'chapter-2' && !isChapterAvailable(this.save, stage.chapterId)) {
+      return 'Clear Chapter 1 to unlock.';
+    }
+    const previousStageId = STAGE_IDS.find((stageId) => STAGE_DEFINITIONS[stageId].unlocksOnClear === stage.id);
+    return previousStageId ? `Clear Stage ${STAGE_DEFINITIONS[previousStageId].number} to unlock.` : 'Locked.';
+  }
+
   private getNextMasteryGoal(
     stars: number,
     objective: ReturnType<typeof getStageMasteryObjective>,
     compact: boolean,
   ): string {
     if (stars <= 0) {
-      return compact ? 'Goal: clear' : `Next ★ ${objective.oneStar}`;
+      return compact ? 'Goal: clear' : `Next * ${objective.oneStar}`;
     }
     if (stars === 1) {
-      return compact ? `Goal: ${objective.twoStars.replace('Clear ', '')}` : `Next ★★ ${objective.twoStars}`;
+      return compact ? `Goal: ${objective.twoStars.replace('Clear ', '')}` : `Next ** ${objective.twoStars}`;
     }
     if (stars === 2) {
       if (compact && objective.threeStars.includes('Energy Nodes')) {
         return 'Goal: 3 nodes, <=4 hits';
+      }
+      if (compact && objective.threeStars.includes('overload')) {
+        return 'Goal: <=3 overload hits';
       }
       if (compact && objective.threeStars.includes('130')) {
         return 'Goal: <=130 damage';
@@ -255,7 +298,7 @@ export class StageSelectScene extends Phaser.Scene {
       if (compact && objective.threeStars.includes('180')) {
         return 'Goal: <=180 damage';
       }
-      return `Next ★★★ ${objective.threeStars}`;
+      return `Next *** ${objective.threeStars}`;
     }
     return compact ? '' : 'Stage mastery complete';
   }

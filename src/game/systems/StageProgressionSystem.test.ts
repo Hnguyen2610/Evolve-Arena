@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { cloneDefaultSave } from '../services/StorageService';
-import type { StageId } from '../types';
+import type { ChapterId, StageId } from '../types';
 import {
   applyStageVictoryProgression,
   getClearedChapterIds,
   getClearedStageIds,
   getUnlockedStageIds,
+  isChapterAvailable,
   isChapterCleared,
   isStageUnlocked,
   markStageCleared,
@@ -64,5 +65,31 @@ describe('StageProgressionSystem', () => {
     expect(isChapterCleared(stage3.save, 'chapter-1')).toBe(true);
     expect(replay.completedChapterId).toBeNull();
     expect(replay.chapterRewardCoins).toBe(0);
+  });
+
+  it('unlocks chapter 2 stage 4 after chapter 1 completion', () => {
+    const stage1 = applyStageVictoryProgression(cloneDefaultSave(), 'stage-1');
+    const stage2 = applyStageVictoryProgression(stage1.save, 'stage-2');
+    const stage3 = applyStageVictoryProgression(stage2.save, 'stage-3');
+
+    expect(isChapterAvailable(stage2.save, 'chapter-2')).toBe(false);
+    expect(stage3.newlyUnlockedStageId).toBe('stage-4');
+    expect(isChapterAvailable(stage3.save, 'chapter-2')).toBe(true);
+    expect(getUnlockedStageIds(stage3.save)).toEqual(['stage-1', 'stage-2', 'stage-3', 'stage-4']);
+  });
+
+  it('clearing stage 4 keeps chapter 2 in progress', () => {
+    const save = {
+      ...cloneDefaultSave(),
+      unlockedStageIds: ['stage-1', 'stage-2', 'stage-3', 'stage-4'] satisfies StageId[],
+      clearedStageIds: ['stage-1', 'stage-2', 'stage-3'] satisfies StageId[],
+      clearedChapterIds: ['chapter-1'] satisfies ChapterId[],
+    };
+    const outcome = applyStageVictoryProgression(save, 'stage-4');
+
+    expect(outcome.stageRewardCoins).toBe(105);
+    expect(outcome.completedChapterId).toBeNull();
+    expect(outcome.chapterRewardCoins).toBe(0);
+    expect(isChapterCleared(outcome.save, 'chapter-2')).toBe(false);
   });
 });

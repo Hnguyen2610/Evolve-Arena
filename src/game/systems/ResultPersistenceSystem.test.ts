@@ -17,6 +17,9 @@ const baseResult: RunResult = {
   damageTaken: 200,
   energyNodesDestroyed: 0,
   energyNodePressureHits: 0,
+  arenaShifts: 0,
+  overloadEvents: 0,
+  overloadHits: 0,
 };
 
 describe('persistResultAndMaybeSendScore', () => {

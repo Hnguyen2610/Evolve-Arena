@@ -13,6 +13,9 @@ export type PlaytestEventName =
   | 'energy_node_spawned'
   | 'energy_node_destroyed'
   | 'energy_node_pressure_hit'
+  | 'arena_shift'
+  | 'overload_started'
+  | 'overload_hit'
   | 'chapter_completed'
   | 'mastery_improved'
   | 'stage_record_improved'
@@ -59,6 +62,9 @@ export interface PlaytestRunTelemetry {
   energyNodesSpawned: number;
   energyNodesDestroyed: number;
   energyNodePressureHits: number;
+  arenaShifts: number;
+  overloadEvents: number;
+  overloadHits: number;
   damageTaken: number;
   remainingHp: number | null;
   maxHp: number | null;
@@ -180,6 +186,9 @@ export class PlaytestTelemetryService {
       energyNodesSpawned: 0,
       energyNodesDestroyed: 0,
       energyNodePressureHits: 0,
+      arenaShifts: 0,
+      overloadEvents: 0,
+      overloadHits: 0,
       damageTaken: 0,
       remainingHp: null,
       maxHp: null,
@@ -295,6 +304,30 @@ export class PlaytestTelemetryService {
     this.recordEvent('energy_node_pressure_hit', seconds);
   }
 
+  recordArenaShift(phase: string, seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.arenaShifts += 1;
+    this.recordEvent('arena_shift', seconds, { phase });
+  }
+
+  recordOverloadStarted(seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.overloadEvents += 1;
+    this.recordEvent('overload_started', seconds);
+  }
+
+  recordOverloadHit(seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.overloadHits += 1;
+    this.recordEvent('overload_hit', seconds);
+  }
+
   recordChapterCompleted(chapterId: ChapterId, seconds: number): void {
     this.recordEvent('chapter_completed', seconds, { chapterId });
   }
@@ -342,6 +375,11 @@ export class PlaytestTelemetryService {
     this.currentRun.playerLevel = input.result.playerLevel;
     this.currentRun.kills = input.result.kills;
     this.currentRun.eliteKills = input.result.eliteKills;
+    this.currentRun.energyNodesDestroyed = input.result.energyNodesDestroyed;
+    this.currentRun.energyNodePressureHits = input.result.energyNodePressureHits;
+    this.currentRun.arenaShifts = input.result.arenaShifts;
+    this.currentRun.overloadEvents = input.result.overloadEvents;
+    this.currentRun.overloadHits = input.result.overloadHits;
     this.currentRun.bossDefeated = input.result.bossDefeated;
     this.currentRun.remainingHp = roundSeconds(input.remainingHp);
     this.currentRun.maxHp = roundSeconds(input.maxHp);

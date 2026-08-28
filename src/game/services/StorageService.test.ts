@@ -27,7 +27,7 @@ describe('StorageService', () => {
       clearedChapterIds: ['chapter-1', 'missing'],
     }));
 
-    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3']);
+    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3', 'stage-4']);
     expect(save.clearedStageIds).toEqual(['stage-1', 'stage-2']);
     expect(save.clearedChapterIds).toEqual(['chapter-1']);
   });
@@ -42,6 +42,27 @@ describe('StorageService', () => {
     expect(save.clearedChapterIds).toEqual([]);
     expect(save.stageMastery).toEqual({ 'stage-1': 1, 'stage-2': 1 });
     expect(save.stageRecords).toEqual({});
+  });
+
+  it('unlocks stage 4 for saves that already completed chapter 1', () => {
+    const save = parseSaveData(JSON.stringify({
+      unlockedStageIds: ['stage-1', 'stage-2', 'stage-3'],
+      clearedStageIds: ['stage-1', 'stage-2', 'stage-3'],
+      clearedChapterIds: ['chapter-1'],
+    }));
+
+    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3', 'stage-4']);
+    expect(save.clearedChapterIds).toEqual(['chapter-1']);
+  });
+
+  it('does not infer chapter 1 completion from old stage-only saves', () => {
+    const save = parseSaveData(JSON.stringify({
+      unlockedStageIds: ['stage-1', 'stage-2', 'stage-3'],
+      clearedStageIds: ['stage-1', 'stage-2', 'stage-3'],
+    }));
+
+    expect(save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3']);
+    expect(save.clearedChapterIds).toEqual([]);
   });
 
   it('normalizes stage mastery and records without awarding fake full mastery', () => {

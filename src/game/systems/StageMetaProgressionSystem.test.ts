@@ -11,7 +11,7 @@ import {
 function result(input: Partial<RunResult> & { stageId?: StageId } = {}): RunResult {
   return {
     stageId: input.stageId ?? 'stage-1',
-    chapterId: 'chapter-1',
+    chapterId: input.chapterId ?? 'chapter-1',
     victory: input.victory ?? true,
     score: input.score ?? 2000,
     kills: input.kills ?? 45,
@@ -23,6 +23,9 @@ function result(input: Partial<RunResult> & { stageId?: StageId } = {}): RunResu
     damageTaken: input.damageTaken ?? 150,
     energyNodesDestroyed: input.energyNodesDestroyed ?? 0,
     energyNodePressureHits: input.energyNodePressureHits ?? 0,
+    arenaShifts: input.arenaShifts ?? 0,
+    overloadEvents: input.overloadEvents ?? 0,
+    overloadHits: input.overloadHits ?? 0,
   };
 }
 
@@ -51,6 +54,23 @@ describe('StageMetaProgressionSystem', () => {
       survivalSeconds: 104,
       energyNodesDestroyed: 3,
       energyNodePressureHits: 4,
+    })).stars).toBe(3);
+  });
+
+  it('evaluates stage 4 mastery using overload adaptation', () => {
+    expect(evaluateStageMastery(result({
+      stageId: 'stage-4',
+      chapterId: 'chapter-2',
+      survivalSeconds: 110,
+      overloadEvents: 2,
+      overloadHits: 5,
+    })).stars).toBe(2);
+    expect(evaluateStageMastery(result({
+      stageId: 'stage-4',
+      chapterId: 'chapter-2',
+      survivalSeconds: 110,
+      overloadEvents: 2,
+      overloadHits: 3,
     })).stars).toBe(3);
   });
 

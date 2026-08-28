@@ -11,4 +11,11 @@ describe('chapters', () => {
     expect(getChapterForStage('stage-2').id).toBe('chapter-1');
     expect(getChapterForStage('stage-3').id).toBe('chapter-1');
   });
+
+  it('defines Chapter 2 as an in-progress Stage 4 foundation', () => {
+    expect(CHAPTER_DEFINITIONS['chapter-2'].stageIds).toEqual(['stage-4']);
+    expect(CHAPTER_DEFINITIONS['chapter-2'].unlocksAfterChapterId).toBe('chapter-1');
+    expect(CHAPTER_DEFINITIONS['chapter-2'].completeWhenAllStagesCleared).toBe(false);
+    expect(getChapterForStage('stage-4').id).toBe('chapter-2');
+  });
 });

@@ -204,14 +204,14 @@ export class ResultScene extends Phaser.Scene {
         this.scene.start('GameScene', { save: this.save, replay: true, stageId: this.result.stageId });
       });
       this.createButton(centerX + buttonWidth * 0.58, buttonY, buttonWidth, 50, 'STAGES', () => {
-        this.scene.start('StageSelectScene', { save: this.save });
+        this.scene.start('StageSelectScene', { save: this.save, chapterId: this.result.chapterId });
       }, false);
     } else {
       this.createButton(centerX, panelY + panelHeight * 0.26, Math.min(320, panelWidth - 48), 60, 'PLAY AGAIN', () => {
         this.scene.start('GameScene', { save: this.save, replay: true, stageId: this.result.stageId });
       });
       this.createButton(centerX, panelY + panelHeight * 0.4, Math.min(320, panelWidth - 48), 52, 'STAGES', () => {
-        this.scene.start('StageSelectScene', { save: this.save });
+        this.scene.start('StageSelectScene', { save: this.save, chapterId: this.result.chapterId });
       }, false);
     }
   }

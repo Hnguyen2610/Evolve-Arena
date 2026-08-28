@@ -1,8 +1,8 @@
 export type GameMode = 'menu' | 'playing' | 'level-up' | 'paused' | 'game-over' | 'victory';
 
-export type ChapterId = 'chapter-1';
+export type ChapterId = 'chapter-1' | 'chapter-2';
 
-export type StageId = 'stage-1' | 'stage-2' | 'stage-3';
+export type StageId = 'stage-1' | 'stage-2' | 'stage-3' | 'stage-4';
 
 export type EnemyType =
   | 'basic'
@@ -14,10 +14,13 @@ export type EnemyType =
   | 'pulse-caster'
   | 'guardian'
   | 'disruptor'
+  | 'anchor'
+  | 'interceptor'
   | 'energy-node'
   | 'boss'
   | 'rift-boss'
-  | 'forge-boss';
+  | 'forge-boss'
+  | 'grid-boss';
 
 export type UpgradeRarity = 'common' | 'rare' | 'epic';
 
@@ -55,7 +58,7 @@ export interface EnemyDefinition {
   score: number;
   radius: number;
   tint: number;
-  behavior: 'chase' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'guardian' | 'disruptor' | 'node' | 'boss';
+  behavior: 'chase' | 'runner' | 'tank' | 'ranged' | 'swarm' | 'guardian' | 'disruptor' | 'anchor' | 'interceptor' | 'node' | 'boss';
 }
 
 export interface EnemyRuntimeData {
@@ -146,6 +149,9 @@ export interface RunResult {
   damageTaken: number;
   energyNodesDestroyed: number;
   energyNodePressureHits: number;
+  arenaShifts: number;
+  overloadEvents: number;
+  overloadHits: number;
 }
 
 export interface StageVisualTheme {
@@ -188,6 +194,19 @@ export interface StageEnergyNodeConfig {
   maxActiveLate: number;
 }
 
+export interface StageArenaShiftConfig {
+  enabled: boolean;
+  startSeconds: number;
+  stableMs: number;
+  warningMs: number;
+  overloadMs: number;
+  recoveryMs: number;
+  sectors: number;
+  dangerousSectors: number;
+  damage: number;
+  damageCooldownMs: number;
+}
+
 export interface StageBossConfig {
   type: EnemyType;
   name: string;
@@ -216,6 +235,7 @@ export interface StageDefinition {
   boss: StageBossConfig;
   hazard: StageHazardConfig;
   energyNode: StageEnergyNodeConfig;
+  arenaShift: StageArenaShiftConfig;
 }
 
 export interface ChapterDefinition {
@@ -224,5 +244,7 @@ export interface ChapterDefinition {
   name: string;
   subtitle: string;
   stageIds: StageId[];
+  unlocksAfterChapterId?: ChapterId;
   completionReward: number;
+  completeWhenAllStagesCleared: boolean;
 }

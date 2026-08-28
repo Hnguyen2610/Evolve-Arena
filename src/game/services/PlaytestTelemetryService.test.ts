@@ -16,6 +16,9 @@ const result: RunResult = {
   damageTaken: 75,
   energyNodesDestroyed: 0,
   energyNodePressureHits: 0,
+  arenaShifts: 0,
+  overloadEvents: 0,
+  overloadHits: 0,
 };
 
 function createService(): PlaytestTelemetryService {
@@ -56,6 +59,20 @@ describe('PlaytestTelemetryService', () => {
       energyNodesSpawned: 1,
       energyNodesDestroyed: 1,
       energyNodePressureHits: 1,
+    });
+  });
+
+  it('records arena overload metrics for stage 4 QA', () => {
+    const telemetry = createService();
+    telemetry.beginRun('new', 'stage-4', 'chapter-2');
+    telemetry.recordArenaShift('warning', 22.1);
+    telemetry.recordOverloadStarted(23.4);
+    telemetry.recordOverloadHit(24.2);
+
+    expect(telemetry.getCurrentRun()).toMatchObject({
+      arenaShifts: 1,
+      overloadEvents: 1,
+      overloadHits: 1,
     });
   });
 

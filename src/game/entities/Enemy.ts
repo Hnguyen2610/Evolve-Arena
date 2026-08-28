@@ -136,6 +136,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     } else if (data.behavior === 'disruptor') {
       const charging = data.nextAttackAt > time && data.nextAttackAt - time < 520;
       this.setScale(this.baseDisplayScale * (1 + (charging ? Math.sin(time / 58) * 0.062 : Math.sin(phase * 1.9) * 0.02)));
+    } else if (data.behavior === 'anchor') {
+      const overloadPulse = data.telegraphUntil > time ? 0.055 : 0.018;
+      this.setScale(this.baseDisplayScale * (1.01 + Math.sin(time / 150) * overloadPulse));
+    } else if (data.behavior === 'interceptor') {
+      const dashing = data.chargeUntil > time;
+      const stretch = dashing ? 0.11 : 0.035;
+      this.setScale(this.baseDisplayScale * (0.96 + stretch), this.baseDisplayScale * (1.02 + Math.sin(time / 90) * stretch));
     } else if (data.behavior === 'node') {
       this.setScale(this.baseDisplayScale * (1 + Math.sin(time / 180) * 0.035));
     } else {
@@ -149,6 +156,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
     if (this.dataModel.type === 'forge-boss') {
       return `forge-boss-${kind}`;
+    }
+    if (this.dataModel.type === 'grid-boss') {
+      return `grid-boss-${kind}`;
     }
     return `boss-${kind}`;
   }
