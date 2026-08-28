@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { UI_DEPTH } from '../config/constants';
+import { PLAYER_VISUAL, registerPlayerVisualAnimations } from '../config/playerVisual';
 import { COLORS, ENEMY_COLORS } from '../config/visual';
 import { gameStorage, platform } from '../services/PlatformServices';
 import { reconcilePersistedBestScore, setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
@@ -11,8 +12,18 @@ export class BootScene extends Phaser.Scene {
     super('BootScene');
   }
 
+  preload(): void {
+    this.load.spritesheet(PLAYER_VISUAL.textureKey, PLAYER_VISUAL.assetPath, {
+      frameWidth: PLAYER_VISUAL.frameWidth,
+      frameHeight: PLAYER_VISUAL.frameHeight,
+    });
+  }
+
   create(): void {
     this.createTextures();
+    if (this.textures.exists(PLAYER_VISUAL.textureKey)) {
+      registerPlayerVisualAnimations(this.anims);
+    }
     this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, COLORS.backgroundDeep, 1);
     this.add
       .text(this.scale.width / 2, this.scale.height / 2, 'EVOLVE ARENA', {

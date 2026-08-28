@@ -1277,7 +1277,7 @@ export class GameScene extends Phaser.Scene {
     playtestTelemetry.recordDamageTaken(damage);
     this.cameras.main.shake(90, 0.004);
     this.showDamage(this.player.x, this.player.y - 24, Math.floor(damage), '#ff9aa8');
-    this.tweens.add({ targets: this.player, alpha: 0.55, duration: 70, yoyo: true });
+    this.player.showHurtFeedback();
     this.audio.play('playerDamage');
     if (this.stats.currentHealth <= 0) {
       this.finishRun(false);

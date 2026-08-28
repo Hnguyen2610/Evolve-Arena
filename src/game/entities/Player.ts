@@ -1,4 +1,11 @@
 import Phaser from 'phaser';
+import {
+  getPlayerVisualAnimationKey,
+  getPlayerVisualDirection,
+  PLAYER_VISUAL,
+  type PlayerVisualDirection,
+  type PlayerVisualMotion,
+} from '../config/playerVisual';
 import { COLORS } from '../config/visual';
 import type { PlayerStats, UpgradeState } from '../types';
 import { addGlowFx, addShadowFx } from '../utils/phaserFx';
@@ -15,6 +22,7 @@ interface PlayerEvolutionVisuals {
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
+  private readonly visual: Phaser.GameObjects.Sprite;
   private readonly glow: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Ellipse;
   private readonly energyField: Phaser.GameObjects.Arc;
@@ -34,10 +42,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     attackSpeedLevels: 0,
   };
   private moving = false;
-  private lastMoveAngle = -Math.PI / 2;
+  private facing: PlayerVisualDirection = 'south';
+  private lastMoveAngle = Math.PI / 2;
+  private hurtFeedbackUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, stats: PlayerStats) {
-    super(scene, x, y, 'player');
+    super(scene, x, y, PLAYER_VISUAL.fallbackTextureKey);
     this.stats = stats;
     this.shadow = scene.add.ellipse(x, y + 20, 46, 17, COLORS.playerGlow, 0.16).setDepth(7);
     this.energyField = scene.add.circle(x, y, 32, COLORS.playerGlow, 0.07).setDepth(8);
@@ -52,13 +62,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.orbiters.push(scene.add.image(x, y, 'spark').setDepth(12).setAlpha(0).setScale(0.7).setTint(COLORS.playerProjectileCore));
     }
     this.glow = scene.add.image(x, y, 'player-glow').setDepth(9).setAlpha(0.72);
+    const visualTexture = scene.textures.exists(PLAYER_VISUAL.textureKey) ? PLAYER_VISUAL.textureKey : PLAYER_VISUAL.fallbackTextureKey;
+    this.visual = scene.add.sprite(x, y, visualTexture).setDepth(10).setScale(PLAYER_VISUAL.renderScale);
+    this.playVisualAnimation('idle');
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setDepth(10);
+    this.setDepth(10).setVisible(false);
     this.setCollideWorldBounds(true);
-    this.setCircle(18, (this.width - 36) / 2, (this.height - 36) / 2);
-    this.fxGlow = addGlowFx(scene, this, COLORS.playerProjectileCore, 1.2, 0.18);
-    this.fxShadow = addShadowFx(scene, this, COLORS.playerGlow, 0.18);
+    this.setCircle(PLAYER_VISUAL.collisionRadius, (this.width - PLAYER_VISUAL.collisionRadius * 2) / 2, (this.height - PLAYER_VISUAL.collisionRadius * 2) / 2);
+    this.fxGlow = addGlowFx(scene, this.visual, COLORS.playerProjectileCore, 1.2, 0.18);
+    this.fxShadow = addShadowFx(scene, this.visual, COLORS.playerGlow, 0.18);
   }
 
   applyInput(vector: Phaser.Math.Vector2): void {
@@ -66,8 +79,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setVelocity(vector.x * this.stats.movementSpeed, vector.y * this.stats.movementSpeed);
     if (this.moving) {
       this.lastMoveAngle = vector.angle();
-      this.rotation = this.lastMoveAngle + Math.PI / 2;
+      this.facing = getPlayerVisualDirection(vector, this.facing);
     }
+  }
+
+  showHurtFeedback(): void {
+    this.hurtFeedbackUntil = this.scene.time.now + 140;
+    this.visual.setTint(0xfff2f5);
+    this.scene.tweens.killTweensOf(this.visual);
+    this.scene.tweens.add({
+      targets: this.visual,
+      alpha: 0.62,
+      scaleX: PLAYER_VISUAL.renderScale * 1.08,
+      scaleY: PLAYER_VISUAL.renderScale * 0.92,
+      duration: 58,
+      yoyo: true,
+      onComplete: () => {
+        this.visual.clearTint();
+        this.visual.setAlpha(1);
+      },
+    });
   }
 
   updateEvolutionVisuals(upgrades: UpgradeState): void {
@@ -100,9 +131,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const pulse = 0.06 + Math.sin(time / cadence) * (0.025 + offense * 0.025);
     const moveLean = this.moving ? 0.08 : 0;
     const squash = this.moving ? 1 + Math.sin(time / 105) * 0.025 : 1;
-    const baseScale = 1 + tier * 0.06;
+    const baseScale = PLAYER_VISUAL.renderScale * (1 + tier * 0.06);
 
-    this.setScale(baseScale * (1 + moveLean * 0.25), baseScale * squash);
+    this.playVisualAnimation(this.moving ? 'run' : 'idle');
+    this.visual
+      .setPosition(this.x, this.y + (this.moving ? Math.sin(time / 105) * 1.4 : Math.sin(time / 310) * 0.65))
+      .setScale(baseScale * (1 + moveLean * 0.25), baseScale * squash);
     this.glow
       .setPosition(this.x, this.y)
       .setScale(1 + pulse + tier * 0.35 + offense * 0.12)
@@ -127,7 +161,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.updateOptionalRings(time, tier);
     this.updateOrbiters(time, tier);
-    this.setAlpha(this.moving ? 1 : 0.96);
+    if (time >= this.hurtFeedbackUntil) {
+      this.visual.setAlpha(this.moving ? 1 : 0.97);
+    }
+  }
+
+  private playVisualAnimation(motion: PlayerVisualMotion): void {
+    const key = getPlayerVisualAnimationKey(this.facing, motion);
+    if (this.scene.anims.exists(key) && this.visual.anims.currentAnim?.key !== key) {
+      this.visual.play(key);
+    }
   }
 
   private updateOptionalRings(time: number, tier: number): void {
@@ -172,6 +215,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene?: boolean): void {
+    this.visual.destroy();
     this.glow.destroy();
     this.shadow.destroy();
     this.energyField.destroy();
