@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
 import {
+  BOSS_VISUAL_ATLAS,
+  getBossVisualAnimationKey,
+  getBossVisualConfig,
+  getBossVisualStartFrame,
+  type BossVisualConfig,
+} from '../config/bossVisual';
+import {
   ENEMY_VISUAL_ATLAS,
   getEnemyVisualAnimationKey,
   getEnemyVisualConfig,
@@ -7,11 +14,21 @@ import {
   type EnemyVisualConfig,
 } from '../config/enemyVisual';
 import { COLORS } from '../config/visual';
+import {
+  getDepthScale,
+  getGroundedVisualY,
+  getGroundEffectDepth,
+  getShadowDepth,
+  getVisualDepth,
+  WORLD_PRESENTATION,
+} from '../systems/WorldPresentation';
+import { WORLD } from '../config/constants';
 import type { EnemyDefinition, EnemyRuntimeData } from '../types';
 import { addGlowFx, addShadowFx } from '../utils/phaserFx';
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   dataModel: EnemyRuntimeData;
+  private readonly bossVisualConfig: BossVisualConfig | null;
   private readonly visualConfig: EnemyVisualConfig | null;
   private readonly visual?: Phaser.GameObjects.Sprite;
   private readonly eliteRing?: Phaser.GameObjects.Image;
@@ -27,6 +44,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
     const bossType = definition.behavior === 'boss';
     super(scene, x, y, bossType ? definition.type : `enemy-${definition.type}`);
+    this.bossVisualConfig = bossType ? getBossVisualConfig(definition.type) : null;
     this.visualConfig = bossType ? null : getEnemyVisualConfig(definition.type);
     const healthScale = elite ? 2.8 : 1;
     const damageScale = elite ? 1.45 : 1;
@@ -52,7 +70,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setTint(elite ? 0xffffff : definition.tint);
     this.setScale(elite ? 1.28 : 1);
     this.baseDisplayScale = elite ? 1.28 : 1;
-    this.baseVisualScale = (this.visualConfig?.scale ?? 1) * (elite ? 1.16 : 1);
+    this.baseVisualScale = (this.bossVisualConfig?.scale ?? this.visualConfig?.scale ?? 1) * (elite ? 1.16 : 1);
     if (this.visualConfig && scene.textures.exists(ENEMY_VISUAL_ATLAS.textureKey)) {
       const startFrame = getEnemyVisualStartFrame(this.visualConfig);
       this.visual = scene.add
@@ -64,9 +82,25 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.visual.play(animationKey);
       }
       this.setVisible(false);
+    } else if (this.bossVisualConfig && scene.textures.exists(BOSS_VISUAL_ATLAS.textureKey)) {
+      const startFrame = getBossVisualStartFrame(this.bossVisualConfig);
+      this.visual = scene.add
+        .sprite(x, y, BOSS_VISUAL_ATLAS.textureKey, startFrame)
+        .setDepth(9)
+        .setScale(this.baseVisualScale);
+      const animationKey = getBossVisualAnimationKey(this.bossVisualConfig.bossType, 'move');
+      if (scene.anims.exists(animationKey)) {
+        this.visual.play(animationKey);
+      }
+      this.setVisible(false);
     }
+    // Enhanced depth-aware shadow for better grounding
+    const shadowLength = 0.6 + 0.4 * ((y - WORLD_PRESENTATION.horizonY) / (WORLD.height - WORLD_PRESENTATION.horizonY));
+    const shadowOffset = definition.radius * 0.68 + shadowLength * 10; // Base offset + depth-based length
+    const shadowVerticalScale = (bossType ? 0.9 : elite ? 0.72 : 0.6) * (0.3 + shadowLength * 0.7); // Base scale + depth-based stretching
+
     this.shadow = scene.add
-      .ellipse(x, y + definition.radius * 0.58, definition.radius * (elite ? 2.25 : 1.85), definition.radius * 0.72, definition.tint, bossType ? 0.18 : 0.12)
+      .ellipse(x, y + shadowOffset, definition.radius * (bossType ? 3.2 : elite ? 2.25 : 1.85), definition.radius * shadowVerticalScale, definition.tint, bossType ? 0.24 : 0.14)
       .setDepth(6);
     if (bossType) {
       this.glow = scene.add.image(x, y, this.getBossCompanionTexture('glow')).setDepth(7).setAlpha(0.42);
@@ -89,12 +123,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     super.preUpdate(time, delta);
     this.updateBodyMotion(time);
     this.updateVisualPresentation(time);
+    const visualDepth = getVisualDepth(this.y, this.isBossType() ? 1.1 : 0);
+    this.setDepth(visualDepth);
+    // Enhanced depth-aware shadow positioning for better grounding
+    const shadowLength = 0.6 + 0.4 * ((this.y - WORLD_PRESENTATION.horizonY) / (WORLD.height - WORLD_PRESENTATION.horizonY));
+    const shadowOffset = this.dataModel.radius * 0.68 + shadowLength * 10; // Base offset + depth-based length
+    const shadowVerticalScale = (this.isBossType() ? 0.9 : this.dataModel.elite ? 0.72 : 0.6) * (0.3 + shadowLength * 0.7); // Base scale + depth-based stretching
+
     this.shadow
-      .setPosition(this.x, this.y + this.dataModel.radius * 0.58)
-        .setScale(this.isBossType() ? this.scaleX * 1.18 : this.scaleX, Math.max(0.75, this.scaleY))
+      .setDepth(getShadowDepth(this.y))
+      .setPosition(this.x, this.y + shadowOffset)
+      .setScale(this.isBossType() ? this.scaleX * 1.38 : this.scaleX, shadowVerticalScale * this.scaleY)
       .setVisible(this.active);
     if (this.eliteRing) {
       this.eliteRing
+        .setDepth(getGroundEffectDepth(this.y, 0.3))
         .setPosition(this.x, this.y)
         .setRotation(-time / 520)
         .setScale(this.scaleX * (0.84 + Math.sin(time / 260) * 0.035))
@@ -107,8 +150,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       const healthRatio = Phaser.Math.Clamp(this.dataModel.health / this.dataModel.maxHealth, 0, 1);
       const instability = 1 - healthRatio;
       this.glow
-        .setPosition(this.x, this.y)
-        .setScale(this.scaleX * (1.04 + Math.sin(time / (240 - instability * 90)) * (0.04 + instability * 0.05)))
+        .setDepth(getGroundEffectDepth(this.y, 0.45))
+        .setPosition(this.x, this.y - this.dataModel.radius * 0.12)
+        .setScale(this.scaleX * (1.14 + Math.sin(time / (240 - instability * 90)) * (0.04 + instability * 0.05)))
         .setAlpha(0.35 + instability * 0.26)
         .setVisible(this.active);
       if (this.fxGlow) {
@@ -124,9 +168,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       const healthRatio = Phaser.Math.Clamp(this.dataModel.health / this.dataModel.maxHealth, 0, 1);
       const instability = 1 - healthRatio;
       this.bossRing
+        .setDepth(getGroundEffectDepth(this.y, 0.8))
         .setPosition(this.x, this.y)
         .setRotation(time / (charging ? 230 : 720 - instability * 240))
-        .setScale(this.scaleX * (1.02 + Math.sin(time / 190) * (charging ? 0.045 : 0.018 + instability * 0.02)))
+        .setScale(this.scaleX * (1.16 + Math.sin(time / 190) * (charging ? 0.045 : 0.018 + instability * 0.02)))
         .setAlpha(charging ? 1 : 0.76 + instability * 0.18)
         .setVisible(this.active);
     }
@@ -144,12 +189,23 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       yoyo: true,
       onComplete: () => {
         target.clearTint();
-        target.setAlpha(1);
+        target.setAlpha(this.alpha);
       },
     });
   }
 
   private updateVisualPresentation(time: number): void {
+    if (!this.visual) {
+      return;
+    }
+    if (this.bossVisualConfig) {
+      this.updateBossVisualPresentation(time);
+      return;
+    }
+    this.updateEnemyVisualPresentation(time);
+  }
+
+  private updateEnemyVisualPresentation(time: number): void {
     if (!this.visual || !this.visualConfig) {
       return;
     }
@@ -157,16 +213,48 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (body && Math.abs(body.velocity.x) > 8) {
       this.visual.setFlipX(body.velocity.x < 0);
     }
-    const scaleX = this.baseVisualScale * (this.scaleX / this.baseDisplayScale);
-    const scaleY = this.baseVisualScale * (this.scaleY / this.baseDisplayScale);
+    const depthScale = getDepthScale(this.y, 0.085);
+    const scaleX = this.baseVisualScale * (this.scaleX / this.baseDisplayScale) * depthScale;
+    const scaleY = this.baseVisualScale * (this.scaleY / this.baseDisplayScale) * depthScale;
     const floating = this.dataModel.behavior === 'ranged' || this.dataModel.behavior === 'node';
     const hover = floating ? Math.sin(time / 260 + this.x * 0.01) * 1.4 : 0;
+    const lift = floating ? 9 : this.dataModel.behavior === 'tank' || this.dataModel.behavior === 'anchor' ? 7 : 11;
     this.visual
-      .setPosition(this.x, this.y + hover)
+      .setDepth(getVisualDepth(this.y, this.dataModel.elite ? 0.75 : 0.35))
+      .setPosition(this.x, getGroundedVisualY(this.y, hover, lift))
       .setScale(scaleX, scaleY)
       .setVisible(this.active);
     if (time >= this.hurtFeedbackUntil) {
-      this.visual.setAlpha(1);
+      this.visual.setAlpha(this.alpha);
+    }
+  }
+
+  private updateBossVisualPresentation(time: number): void {
+    if (!this.visual || !this.bossVisualConfig) {
+      return;
+    }
+    const data = this.dataModel;
+    const healthRatio = Phaser.Math.Clamp(data.health / data.maxHealth, 0, 1);
+    const instability = 1 - healthRatio;
+    const attacking = data.telegraphUntil > time || data.chargeUntil > time;
+    const animationKey = getBossVisualAnimationKey(this.bossVisualConfig.bossType, attacking ? 'attack' : 'move');
+    if (this.visual.anims.currentAnim?.key !== animationKey && this.scene.anims.exists(animationKey)) {
+      this.visual.play(animationKey);
+    }
+    const pulse = attacking ? 0.08 : 0.02 + instability * 0.035;
+    const pulseScale = 1 + Math.sin(time / (attacking ? 95 : 220)) * pulse;
+    const depthScale = getDepthScale(this.y, 0.095);
+    const bossPresenceScale = 1.12;
+    const scaleX = this.baseVisualScale * (this.scaleX / this.baseDisplayScale) * pulseScale * depthScale * bossPresenceScale;
+    const scaleY = this.baseVisualScale * (this.scaleY / this.baseDisplayScale) * (1 + Math.cos(time / 260) * (0.012 + instability * 0.015)) * depthScale * bossPresenceScale;
+    this.visual
+      .setDepth(getVisualDepth(this.y, 1.35))
+      .setPosition(this.x, getGroundedVisualY(this.y, attacking ? -2 : Math.sin(time / 330) * 1.2, 19))
+      .setRotation(this.rotation)
+      .setScale(scaleX, scaleY)
+      .setVisible(this.active);
+    if (time >= this.hurtFeedbackUntil) {
+      this.visual.setAlpha(Phaser.Math.Clamp(this.alpha + instability * 0.08, 0, 1));
     }
   }
 

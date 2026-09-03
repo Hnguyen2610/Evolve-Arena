@@ -5,6 +5,7 @@ import { COLORS } from '../config/visual';
 export class BossHealthBar {
   private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
+  private readonly panel: Phaser.GameObjects.Rectangle;
   private readonly fill: Phaser.GameObjects.Rectangle;
   private readonly lagFill: Phaser.GameObjects.Rectangle;
   private readonly label: Phaser.GameObjects.Text;
@@ -12,8 +13,8 @@ export class BossHealthBar {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    const panel = scene.add.rectangle(0, 0, 570, 48, COLORS.uiPanelDark, 0.78).setOrigin(0.5);
-    panel.setStrokeStyle(2, COLORS.boss, 0.48);
+    this.panel = scene.add.rectangle(0, 0, 570, 48, COLORS.uiPanelDark, 0.78).setOrigin(0.5);
+    this.panel.setStrokeStyle(2, COLORS.boss, 0.48);
     const bg = scene.add.rectangle(-260, 10, 520, 14, 0x000000, 0.52).setOrigin(0, 0.5);
     this.lagFill = scene.add.rectangle(-260, 10, 520, 14, COLORS.warning, 0.5).setOrigin(0, 0.5);
     this.fill = scene.add.rectangle(-260, 10, 520, 14, COLORS.boss, 0.96).setOrigin(0, 0.5);
@@ -27,7 +28,7 @@ export class BossHealthBar {
       })
       .setOrigin(0.5);
     this.container = scene.add
-      .container(0, 0, [panel, bg, this.lagFill, this.fill, this.label])
+      .container(0, 0, [this.panel, bg, this.lagFill, this.fill, this.label])
       .setScrollFactor(0)
       .setDepth(UI_DEPTH.hud);
     this.container.setVisible(false);
@@ -35,7 +36,11 @@ export class BossHealthBar {
     this.layout();
   }
 
-  show(): void {
+  show(label = 'APEX CORE', color = COLORS.boss, dangerColor = COLORS.warning): void {
+    this.label.setText(label.toUpperCase());
+    this.panel.setStrokeStyle(2, color, 0.48);
+    this.fill.setFillStyle(color, 0.96);
+    this.lagFill.setFillStyle(dangerColor, 0.5);
     this.container.setVisible(true).setAlpha(0);
     this.scene.tweens.add({ targets: this.container, alpha: 1, duration: 180 });
   }

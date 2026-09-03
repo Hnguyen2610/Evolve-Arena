@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { BOSS_VISUAL_ATLAS, registerBossVisualAnimations } from '../config/bossVisual';
 import { UI_DEPTH } from '../config/constants';
 import { ENEMY_VISUAL_ATLAS, registerEnemyVisualAnimations } from '../config/enemyVisual';
 import { PLAYER_VISUAL, registerPlayerVisualAnimations } from '../config/playerVisual';
@@ -14,6 +15,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    this.load.spritesheet(BOSS_VISUAL_ATLAS.textureKey, BOSS_VISUAL_ATLAS.assetPath, {
+      frameWidth: BOSS_VISUAL_ATLAS.frameWidth,
+      frameHeight: BOSS_VISUAL_ATLAS.frameHeight,
+    });
     this.load.spritesheet(ENEMY_VISUAL_ATLAS.textureKey, ENEMY_VISUAL_ATLAS.assetPath, {
       frameWidth: ENEMY_VISUAL_ATLAS.frameWidth,
       frameHeight: ENEMY_VISUAL_ATLAS.frameHeight,
@@ -31,6 +36,9 @@ export class BootScene extends Phaser.Scene {
     }
     if (this.textures.exists(ENEMY_VISUAL_ATLAS.textureKey)) {
       registerEnemyVisualAnimations(this.anims);
+    }
+    if (this.textures.exists(BOSS_VISUAL_ATLAS.textureKey)) {
+      registerBossVisualAnimations(this.anims);
     }
     this.add.rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, COLORS.backgroundDeep, 1);
     this.add

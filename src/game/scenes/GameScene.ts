@@ -32,6 +32,13 @@ import {
   type ArenaShiftState,
   type ForcedArenaShift,
 } from '../systems/ArenaStateSystem';
+import {
+  createPlatformPoints,
+  projectArenaPoint,
+  getDepthScale,
+  getVisualDepth,
+  WORLD_PRESENTATION,
+} from '../systems/WorldPresentation';
 import type {
   EnemyDefinition,
   EnemyRuntimeData,
@@ -53,8 +60,8 @@ interface GameSceneData {
 }
 
 interface StageHazardInstance {
-  zone: Phaser.GameObjects.Arc;
-  core: Phaser.GameObjects.Arc;
+  zone: Phaser.GameObjects.Ellipse;
+  core: Phaser.GameObjects.Ellipse;
   x: number;
   y: number;
   radius: number;
@@ -84,6 +91,7 @@ export class GameScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private arenaFx!: Phaser.GameObjects.Graphics;
   private foregroundFx!: Phaser.GameObjects.Graphics;
+  private foregroundDepthFx!: Phaser.GameObjects.Graphics;
   private audio = gameAudio;
   private analytics = new MemoryAnalyticsService();
   private stage: StageDefinition = getStageDefinition(DEFAULT_STAGE_ID);
@@ -246,45 +254,166 @@ export class GameScene extends Phaser.Scene {
     this.graphics = this.add.graphics().setDepth(UI_DEPTH.world);
     this.graphics.fillStyle(theme.backgroundDeep, 1);
     this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.graphics.fillStyle(theme.arenaBase, 0.86);
-    this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
-    this.graphics.fillStyle(theme.backgroundDeep, 0.38);
-    this.graphics.fillCircle(WORLD.width * 0.18, WORLD.height * 0.2, 520);
-    this.graphics.fillCircle(WORLD.width * 0.82, WORLD.height * 0.78, 620);
-    this.graphics.lineStyle(1, theme.arenaGrid, 0.16);
-    for (let x = 0; x <= WORLD.width; x += WORLD.tileSize) {
-      this.graphics.lineBetween(x, 0, x, WORLD.height);
-    }
-    for (let y = 0; y <= WORLD.height; y += WORLD.tileSize) {
-      this.graphics.lineBetween(0, y, WORLD.width, y);
-    }
-    this.graphics.lineStyle(2, theme.arenaAccent, 0.24);
-    for (let x = WORLD.tileSize; x <= WORLD.width; x += WORLD.tileSize * 4) {
-      this.graphics.lineBetween(x, WORLD.height * 0.16, x + WORLD.height * 0.18, WORLD.height * 0.84);
-    }
+    this.drawRaisedArenaPlatform(theme);
     const centerX = WORLD.width / 2;
     const centerY = WORLD.height / 2;
-    this.graphics.lineStyle(3, theme.arenaMark, 0.14);
-    this.graphics.strokeCircle(centerX, centerY, 260);
-    this.graphics.strokeCircle(centerX, centerY, 520);
-    this.graphics.lineStyle(2, COLORS.playerProjectileCore, 0.1);
+    const projectedCenter = projectArenaPoint(centerX, centerY);
+    this.graphics.lineStyle(3, theme.arenaMark, 0.16);
+    this.graphics.strokeEllipse(projectedCenter.x, projectedCenter.y, 520, 520 * WORLD_PRESENTATION.verticalCompression);
+    this.graphics.strokeEllipse(projectedCenter.x, projectedCenter.y, 1040, 1040 * WORLD_PRESENTATION.verticalCompression);
+    this.graphics.lineStyle(2, COLORS.playerProjectileCore, 0.13);
     for (let i = 0; i < 6; i += 1) {
       const angle = (Math.PI * 2 * i) / 6;
-      this.graphics.lineBetween(
-        centerX + Math.cos(angle) * 300,
-        centerY + Math.sin(angle) * 300,
-        centerX + Math.cos(angle) * 620,
-        centerY + Math.sin(angle) * 620,
-      );
+      const inner = projectArenaPoint(centerX + Math.cos(angle) * 300, centerY + Math.sin(angle) * 300);
+      const outer = projectArenaPoint(centerX + Math.cos(angle) * 620, centerY + Math.sin(angle) * 620);
+      this.graphics.lineBetween(inner.x, inner.y, outer.x, outer.y);
       this.graphics.fillStyle(theme.arenaMark, 0.12);
-      this.graphics.fillCircle(centerX + Math.cos(angle) * 520, centerY + Math.sin(angle) * 520, 9);
+      this.graphics.fillCircle(outer.x, outer.y, 9);
     }
     this.graphics.lineStyle(4, theme.bossShell, 0.1);
-    this.graphics.strokeCircle(centerX, centerY, 150);
+    this.graphics.strokeEllipse(projectedCenter.x, projectedCenter.y, 300, 300 * WORLD_PRESENTATION.verticalCompression);
     this.graphics.fillStyle(theme.arenaMark, 0.06);
-    this.graphics.fillCircle(centerX, centerY, 92);
+    this.graphics.fillEllipse(projectedCenter.x, projectedCenter.y, 184, 184 * WORLD_PRESENTATION.verticalCompression);
+    this.drawDepthProps(theme);
     this.arenaFx = this.add.graphics().setDepth(UI_DEPTH.world + 1);
     this.foregroundFx = this.add.graphics().setDepth(UI_DEPTH.effects - 1);
+    this.foregroundDepthFx = this.add.graphics().setDepth(UI_DEPTH.effects - 3);
+    this.drawForegroundDepthProps(theme);
+  }
+
+  private drawRaisedArenaPlatform(theme: StageDefinition['visualTheme']): void {
+    const platform = createPlatformPoints();
+
+    // Base platform rendering
+    this.graphics.fillStyle(theme.backgroundDeep, 0.54);
+    this.graphics.fillPoints(platform.surface.map((point) => new Phaser.Geom.Point(point.x + 36, point.y + 66)), true);
+    this.graphics.fillStyle(theme.bossShell, 0.26);
+    this.graphics.fillPoints(platform.bottomEdge, true);
+    this.graphics.fillStyle(theme.arenaAccent, 0.2);
+    this.graphics.fillPoints(platform.leftEdge, true);
+    this.graphics.fillPoints(platform.rightEdge, true);
+    this.graphics.fillStyle(theme.arenaBase, 0.92);
+    this.graphics.fillPoints(platform.surface, true);
+    this.graphics.lineStyle(5, theme.arenaAccent, 0.42);
+    this.graphics.strokePoints(platform.surface, true);
+    this.graphics.lineStyle(2, theme.arenaGrid, 0.16);
+
+    const left = WORLD_PRESENTATION.platformMarginX;
+    const right = WORLD.width - WORLD_PRESENTATION.platformMarginX;
+    const top = WORLD_PRESENTATION.platformMarginY;
+    const bottom = WORLD.height - WORLD_PRESENTATION.platformMarginY;
+    for (let y = top + WORLD.tileSize; y < bottom; y += WORLD.tileSize) {
+      const start = projectArenaPoint(left, y);
+      const end = projectArenaPoint(right, y);
+      this.graphics.lineBetween(start.x, start.y, end.x, end.y);
+    }
+    for (let x = left + WORLD.tileSize; x < right; x += WORLD.tileSize) {
+      const start = projectArenaPoint(x, top);
+      const end = projectArenaPoint(x, bottom);
+      this.graphics.lineBetween(start.x, start.y, end.x, end.y);
+    }
+
+    this.graphics.lineStyle(2, theme.arenaAccent, 0.24);
+    for (let x = left + WORLD.tileSize; x <= right; x += WORLD.tileSize * 4) {
+      const topPoint = projectArenaPoint(x, WORLD.height * 0.16);
+      const bottomPoint = projectArenaPoint(x + WORLD.height * 0.18, WORLD.height * 0.84);
+      this.graphics.lineBetween(topPoint.x, topPoint.y, bottomPoint.x, bottomPoint.y);
+    }
+
+    // Enhanced terrain layers for better depth perception
+    this.drawTerrainLayers(theme);
+  }
+
+  private drawDepthProps(theme: StageDefinition['visualTheme']): void {
+    this.graphics.fillStyle(theme.backgroundDeep, 0.24);
+    this.graphics.fillCircle(WORLD.width * 0.18, WORLD.height * 0.2, 520);
+    this.graphics.fillCircle(WORLD.width * 0.82, WORLD.height * 0.78, 620);
+
+    const props = [
+      { x: 310, y: 260, w: 150, h: 54, color: theme.arenaAccent },
+      { x: 1990, y: 330, w: 190, h: 62, color: theme.bossShell },
+      { x: 540, y: 1260, w: 180, h: 58, color: theme.arenaGrid },
+      { x: 1810, y: 1180, w: 155, h: 50, color: theme.arenaAccent },
+      { x: 1210, y: 310, w: 110, h: 42, color: theme.arenaMark },
+    ];
+
+    props.forEach((prop, index) => {
+      const point = projectArenaPoint(prop.x, prop.y);
+      this.graphics.fillStyle(theme.backgroundDeep, 0.36);
+      this.graphics.fillEllipse(point.x + 12, point.y + prop.h * 0.58, prop.w * 0.72, prop.h * 0.42);
+      this.graphics.fillStyle(prop.color, index === 4 ? 0.18 : 0.24);
+      this.graphics.fillRect(point.x - prop.w / 2, point.y - prop.h / 2, prop.w, prop.h);
+      this.graphics.fillStyle(theme.foreground, 0.1);
+      this.graphics.fillRect(point.x - prop.w / 2 + 8, point.y - prop.h / 2 + 7, prop.w - 16, 5);
+      this.graphics.lineStyle(2, theme.arenaAccent, 0.24);
+      this.graphics.strokeRect(point.x - prop.w / 2, point.y - prop.h / 2, prop.w, prop.h);
+    });
+  }
+
+  private drawForegroundDepthProps(theme: StageDefinition['visualTheme']): void {
+    const lowerLeft = projectArenaPoint(210, WORLD.height - 210);
+    const lowerRight = projectArenaPoint(WORLD.width - 230, WORLD.height - 180);
+    this.foregroundDepthFx.fillStyle(theme.backgroundDeep, 0.38);
+    this.foregroundDepthFx.fillEllipse(lowerLeft.x, lowerLeft.y + 48, 210, 46);
+    this.foregroundDepthFx.fillEllipse(lowerRight.x, lowerRight.y + 52, 250, 50);
+    this.foregroundDepthFx.fillStyle(theme.arenaAccent, 0.36);
+    this.foregroundDepthFx.fillRect(lowerLeft.x - 84, lowerLeft.y - 8, 168, 58);
+    this.foregroundDepthFx.fillRect(lowerRight.x - 104, lowerRight.y - 4, 208, 66);
+    this.foregroundDepthFx.fillStyle(theme.foreground, 0.12);
+    this.foregroundDepthFx.fillRect(lowerLeft.x - 70, lowerLeft.y + 4, 138, 7);
+    this.foregroundDepthFx.fillRect(lowerRight.x - 88, lowerRight.y + 9, 176, 8);
+  }
+
+  private drawTerrainLayers(theme: StageDefinition['visualTheme']): void {
+    // Enhanced terrain depth layers for better 2.5D perception
+    // These create subtle atmospheric perspective and depth cues
+
+    // Distant background elements (behind arena)
+    this.graphics.fillStyle(theme.backgroundDeep, 0.15);
+    this.graphics.fillCircle(WORLD.width * 0.5, WORLD.height * 0.3, 800);
+    this.graphics.fillStyle(theme.arenaAccent, 0.08);
+    this.graphics.fillCircle(WORLD.width * 0.7, WORLD.height * 0.25, 400);
+    this.graphics.fillStyle(theme.arenaGrid, 0.06);
+    this.graphics.fillCircle(WORLD.width * 0.3, WORLD.height * 0.35, 300);
+
+    // Mid-distance atmospheric haze
+    this.graphics.fillStyle(theme.backgroundDeep, 0.1);
+    this.graphics.fillEllipse(WORLD.width * 0.5, WORLD.height * 0.45, 1000, 200);
+    this.graphics.fillStyle(theme.arenaBase, 0.05);
+    this.graphics.fillEllipse(WORLD.width * 0.5, WORLD.height * 0.5, 1200, 150);
+
+    // Enhanced ground texture with depth variation
+    for (let i = 0; i < 8; i++) {
+      const xOffset = (WORLD.width / 8) * i;
+      const yBase = WORLD.height * 0.55 + Math.sin(i * 0.8) * 20;
+
+      // Varying opacity for depth effect
+      const opacity = 0.03 + (Math.sin(i * 0.5) * 0.02);
+
+      this.graphics.fillStyle(theme.arenaGrid, opacity);
+      this.graphics.fillEllipse(
+        xOffset + 100,
+        yBase,
+        150 + Math.sin(this.time.now * 0.001 + i) * 30,
+        25 + Math.sin(this.time.now * 0.001 + i * 0.5) * 8
+      );
+    }
+
+    // Foreground depth enhancement
+    this.foregroundDepthFx.fillStyle(theme.backgroundDeep, 0.2);
+    this.foregroundDepthFx.fillEllipse(
+      WORLD.width * 0.2,
+      WORLD.height * 0.8,
+      300,
+      60
+    );
+    this.foregroundDepthFx.fillStyle(theme.backgroundDeep, 0.15);
+    this.foregroundDepthFx.fillEllipse(
+      WORLD.width * 0.8,
+      WORLD.height * 0.85,
+      250,
+      50
+    );
   }
 
   private updateArenaVisuals(time: number): void {
@@ -915,8 +1044,8 @@ export class GameScene extends Phaser.Scene {
   private startEnergyNodePulse(node: Enemy, time: number): void {
     const config = this.stage.energyNode;
     const color = this.stage.visualTheme.hazard;
-    const ring = this.add.circle(node.x, node.y, 48, color, 0.08).setStrokeStyle(4, color, 0.62).setDepth(UI_DEPTH.effects);
-    const glow = this.add.image(node.x, node.y, 'energy-node-glow').setTint(color).setAlpha(0.32).setDepth(UI_DEPTH.effects - 1);
+    const ring = this.add.circle(node.x, node.y, 48, color, 0.08).setStrokeStyle(4, color, 0.62).setDepth(getVisualDepth(node.y, 0));
+    const glow = this.add.image(node.x, node.y, 'energy-node-glow').setTint(color).setAlpha(0.32).setDepth(getVisualDepth(node.y, -0.5));
     this.tweens.add({
       targets: [ring, glow],
       scale: 2.25,
@@ -1025,7 +1154,8 @@ export class GameScene extends Phaser.Scene {
 
   private createEnergyNodeArrival(x: number, y: number): void {
     const color = this.stage.visualTheme.hazard;
-    const glow = this.add.image(x, y, 'energy-node-glow').setTint(color).setAlpha(0.24).setDepth(UI_DEPTH.effects - 1);
+    const depth = getVisualDepth(y, 0);
+    const glow = this.add.image(x, y, 'energy-node-glow').setTint(color).setAlpha(0.24).setDepth(depth - 0.5);
     this.tweens.add({ targets: glow, scale: 1.8, alpha: 0, duration: 420, ease: 'Sine.Out', onComplete: () => glow.destroy() });
   }
 
@@ -1471,21 +1601,26 @@ export class GameScene extends Phaser.Scene {
   private spawnStageHazard(time: number): void {
     const config = this.stage.hazard;
     const point = this.pickHazardPoint();
-    const zone = this.add.circle(point.x, point.y, config.radius, this.stage.visualTheme.hazard, 0.06);
-    zone.setStrokeStyle(3, this.stage.visualTheme.hazard, 0.58).setDepth(UI_DEPTH.effects - 1);
-    const core = this.add.circle(point.x, point.y, Math.max(22, config.radius * 0.18), this.stage.visualTheme.bossDanger, 0.22);
-    core.setStrokeStyle(2, 0xffffff, 0.4).setDepth(UI_DEPTH.effects);
+    const depthScale = getDepthScale(point.y, 0.1);
+    const visualPoint = projectArenaPoint(point.x, point.y);
+    const zone = this.add.ellipse(visualPoint.x, visualPoint.y, config.radius * depthScale * 2, config.radius * depthScale * 2 * WORLD_PRESENTATION.verticalCompression, this.stage.visualTheme.hazard, 0.06);
+    zone.setStrokeStyle(3, this.stage.visualTheme.hazard, 0.58).setDepth(getVisualDepth(point.y, 0));
+    const coreSize = Math.max(22, config.radius * 0.18 * depthScale);
+    const core = this.add.ellipse(visualPoint.x, visualPoint.y, coreSize * 2, coreSize * 2 * WORLD_PRESENTATION.verticalCompression, this.stage.visualTheme.bossDanger, 0.22);
+    core.setStrokeStyle(2, 0xffffff, 0.4).setDepth(getVisualDepth(point.y, 0));
     this.tweens.add({
       targets: zone,
-      scale: { from: 0.18, to: 1 },
+      scaleX: { from: 0.18, to: 1 },
+      scaleY: { from: 0.18, to: 1 },
       alpha: { from: 0.9, to: 0.72 },
       duration: config.telegraphMs,
       ease: 'Sine.Out',
     });
     this.tweens.add({
       targets: core,
-      scale: 2.8,
-      alpha: 0,
+      scaleX: { from: 0.18, to: 1 },
+      scaleY: { from: 0.18, to: 1 },
+      alpha: { from: 0.22, to: 0 },
       duration: config.telegraphMs + config.activeMs,
       ease: 'Sine.Out',
       onComplete: () => core.destroy(),
@@ -1550,7 +1685,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: this.boss, alpha: 1, scale: 1, duration: 260, ease: 'Back.Out' });
     this.createSpawnFlash(this.boss.x, this.boss.y, this.stage.visualTheme.boss, 92);
     this.createBossMaterialization(this.boss.x, this.boss.y);
-    this.bossBar.show();
+    this.bossBar.show(this.stage.boss.name, this.stage.visualTheme.boss, this.stage.visualTheme.bossDanger);
     this.nextBossChargeAt = time + 2500;
     this.nextBossRadialAt = time + 4200;
     this.nextBossSupportNodeAt = time + 5200;

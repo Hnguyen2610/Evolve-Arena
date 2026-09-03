@@ -7,6 +7,15 @@ import {
   type PlayerVisualMotion,
 } from '../config/playerVisual';
 import { COLORS } from '../config/visual';
+import {
+  getDepthScale,
+  getGroundedVisualY,
+  getGroundEffectDepth,
+  getShadowDepth,
+  getVisualDepth,
+  WORLD_PRESENTATION,
+} from '../systems/WorldPresentation';
+import { WORLD } from '../config/constants';
 import type { PlayerStats, UpgradeState } from '../types';
 import { addGlowFx, addShadowFx } from '../utils/phaserFx';
 
@@ -131,21 +140,34 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const pulse = 0.06 + Math.sin(time / cadence) * (0.025 + offense * 0.025);
     const moveLean = this.moving ? 0.08 : 0;
     const squash = this.moving ? 1 + Math.sin(time / 105) * 0.025 : 1;
-    const baseScale = PLAYER_VISUAL.renderScale * (1 + tier * 0.06);
+    const depthScale = getDepthScale(this.y, 0.1);
+    const baseScale = PLAYER_VISUAL.renderScale * (1 + tier * 0.06) * depthScale;
+    const visualDepth = getVisualDepth(this.y, 1.2);
+    const footLift = 15 + tier * 3;
+    const bob = this.moving ? Math.sin(time / 105) * 1.4 : Math.sin(time / 310) * 0.65;
 
     this.playVisualAnimation(this.moving ? 'run' : 'idle');
     this.visual
-      .setPosition(this.x, this.y + (this.moving ? Math.sin(time / 105) * 1.4 : Math.sin(time / 310) * 0.65))
+      .setDepth(visualDepth)
+      .setPosition(this.x, getGroundedVisualY(this.y, bob, footLift))
       .setScale(baseScale * (1 + moveLean * 0.25), baseScale * squash);
     this.glow
+      .setDepth(getGroundEffectDepth(this.y, 0.6))
       .setPosition(this.x, this.y)
       .setScale(1 + pulse + tier * 0.35 + offense * 0.12)
       .setAlpha(this.moving ? 0.76 + tier * 0.16 : 0.54 + tier * 0.18);
+    // Enhanced depth-aware shadow for better grounding
+    const shadowLength = 0.6 + 0.4 * ((this.y - WORLD_PRESENTATION.horizonY) / (WORLD.height - WORLD_PRESENTATION.horizonY));
+    const shadowOffset = 20 + shadowLength * 10; // Longer shadow for objects further back
+    const shadowVerticalScale = 0.3 + shadowLength * 0.4; // More stretched shadow for objects further back
+
     this.shadow
-      .setPosition(this.x - Math.cos(this.lastMoveAngle) * (this.moving ? 5 : 0), this.y + 21)
-      .setScale(1 + tier * 0.32, 1 + tier * 0.12)
-      .setAlpha(0.16 + tier * 0.1);
+      .setDepth(getShadowDepth(this.y))
+      .setPosition(this.x - Math.cos(this.lastMoveAngle) * (this.moving ? 5 : 0), this.y + shadowOffset)
+      .setScale((1.08 + tier * 0.34) * depthScale, shadowVerticalScale * depthScale)
+      .setAlpha(0.1 + tier * 0.05 + (1 - shadowLength) * 0.1); // More transparent for objects further back
     this.energyField
+      .setDepth(getGroundEffectDepth(this.y, 0.1))
       .setPosition(this.x, this.y)
       .setRadius(32 + tier * 18 + offense * 6)
       .setAlpha(0.06 + tier * 0.08)
@@ -177,6 +199,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const armorVisible = this.evolution.armorLevels > 0;
     this.shieldRing
       .setVisible(armorVisible)
+      .setDepth(getVisualDepth(this.y, 1.65))
       .setPosition(this.x, this.y)
       .setRadius(33 + this.evolution.armorLevels * 3)
       .setRotation(-time / 520);
@@ -185,6 +208,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const magnetVisible = this.evolution.magnetLevels > 0;
     this.magnetRing
       .setVisible(magnetVisible)
+      .setDepth(getGroundEffectDepth(this.y))
       .setPosition(this.x, this.y)
       .setRadius(48 + this.evolution.magnetLevels * 7 + Math.sin(time / 360) * 3);
     this.magnetRing.setStrokeStyle(2, COLORS.playerMagnet, magnetVisible ? 0.12 + this.evolution.magnetLevels * 0.025 : 0);
@@ -192,6 +216,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const lifestealVisible = this.evolution.lifestealLevels > 0;
     this.lifestealRing
       .setVisible(lifestealVisible)
+      .setDepth(getGroundEffectDepth(this.y, 0.2))
       .setPosition(this.x, this.y)
       .setRadius(37 + Math.sin(time / 220) * 4)
       .setAlpha(lifestealVisible ? 0.24 + Math.sin(time / 180) * 0.05 : 0);
@@ -207,6 +232,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const angle = time / 480 + (Math.PI * 2 * index) / Math.max(1, count);
       const radius = 34 + tier * 16;
       orbiter
+        .setDepth(getVisualDepth(this.y, 2.1))
         .setPosition(this.x + Math.cos(angle) * radius, this.y + Math.sin(angle) * radius * 0.78)
         .setAlpha(0.52 + tier * 0.28)
         .setScale(0.58 + tier * 0.3)

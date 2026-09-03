@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getGroundEffectDepth, getVisualDepth } from '../systems/WorldPresentation';
 import type { XpOrbData } from '../types';
 
 export class ExperienceOrb extends Phaser.Physics.Arcade.Sprite {
@@ -28,7 +29,11 @@ export class ExperienceOrb extends Phaser.Physics.Arcade.Sprite {
     if (!this.active) {
       return;
     }
-    this.glow.setPosition(this.x, this.y).setScale(this.xpData.attracted ? 1.18 : 0.92 + Math.sin(time / 180) * 0.08);
+    this.setDepth(getVisualDepth(this.y, -0.15));
+    this.glow
+      .setDepth(getGroundEffectDepth(this.y, -0.2))
+      .setPosition(this.x, this.y)
+      .setScale(this.xpData.attracted ? 1.18 : 0.92 + Math.sin(time / 180) * 0.08);
     this.setRotation(time / 600);
   }
 

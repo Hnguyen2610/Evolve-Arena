@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getVisualDepth, getDepthScale } from '../systems/WorldPresentation';
 import type { ProjectileData } from '../types';
 import type { Enemy } from './Enemy';
 
@@ -51,6 +52,12 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     if (!this.active) {
       return;
     }
+    const depth = getVisualDepth(this.y, 2.8);
+    const depthScale = getDepthScale(this.y, 0.1); // Subtle size scaling for projectiles
+    this.setDepth(depth);
+    this.setScale(this.projectileData.size * depthScale);
+    this.trail.setDepth(depth - 0.15);
+    this.trail.setScale(this.projectileData.size * depthScale);
     this.trail.setPosition(this.x - Math.cos(this.rotation) * 13, this.y - Math.sin(this.rotation) * 13);
     this.trail.setRotation(this.rotation);
     if (this.projectileData.owner === 'player') {
