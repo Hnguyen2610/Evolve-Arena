@@ -76,24 +76,26 @@ export class StageSelectScene extends Phaser.Scene {
           : chapterCleared
             ? `COMPLETE  |  MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} *`
             : `MASTERY ${chapterMastery.earnedStars}/${chapterMastery.maxStars} *  |  ${chapter.subtitle}`;
-    this.addNode(
-      this.add
-        .text(width / 2, titleY + (shortLandscape ? 66 : 88), `CHAPTER ${chapter.number}: ${chapter.name.toUpperCase()}  |  ${chapterStatus}`, {
-          color: chapterAvailable ? (chapterCleared ? '#9ff7db' : '#d7edff') : '#8ea0bc',
-          fontFamily: 'Arial, Helvetica, sans-serif',
-          fontSize: shortLandscape ? '12px' : '14px',
-          fontStyle: '900',
-          align: 'center',
-          wordWrap: { width: Math.min(width - 44, 680) },
-        })
-        .setOrigin(0.5),
-    );
+    const subtitleText = this.add
+      .text(width / 2, titleY + (shortLandscape ? 66 : 88), `CHAPTER ${chapter.number}: ${chapter.name.toUpperCase()}  |  ${chapterStatus}`, {
+        color: chapterAvailable ? (chapterCleared ? '#9ff7db' : '#d7edff') : '#8ea0bc',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: shortLandscape ? '12px' : '14px',
+        fontStyle: '900',
+        align: 'center',
+        wordWrap: { width: Math.min(width - 44, 680) },
+      })
+      .setOrigin(0.5);
+    this.addNode(subtitleText);
 
     const clearedIds = getClearedStageIds(this.save);
     const stages = chapter.stageIds;
     const cardWidth = shortLandscape ? Math.min(262, (width - 96) / Math.max(1, stages.length)) : Math.min(420, width - 42);
     const cardHeight = shortLandscape ? 166 : 154;
-    const startY = shortLandscape ? height * 0.62 : titleY + 154;
+    // Guard against the subtitle wrapping to a second line (long chapter status text on a
+    // narrow window) and colliding with the first stage card below it.
+    const subtitleBottom = subtitleText.y + subtitleText.height / 2;
+    const startY = shortLandscape ? height * 0.62 : Math.max(titleY + 154, subtitleBottom + 20 + cardHeight / 2);
     const gap = shortLandscape ? cardWidth + 20 : cardHeight + 16;
 
     stages.forEach((stageId, index) => {
@@ -178,7 +180,7 @@ export class StageSelectScene extends Phaser.Scene {
     const mastery = unlocked ? getStageMastery(this.save, stage.id) : 0;
     const record = unlocked ? getStageRecord(this.save, stage.id) : { bestScore: 0 };
     const objective = getStageMasteryObjective(stage.id);
-    const nextGoal = this.getNextMasteryGoal(mastery, objective, shortLandscape);
+    const nextGoal = this.getNextMasteryGoal(mastery, objective, shortLandscape || width < 420);
     const statusText = !unlocked ? 'LOCKED' : mastery >= 3 ? 'MASTERED' : cleared ? 'IMPROVE' : 'READY';
     const description = this.add
       .text(-width / 2 + 22, -height / 2 + (shortLandscape ? 96 : 95), unlocked ? objective.identity : lockMessage, {
@@ -297,6 +299,9 @@ export class StageSelectScene extends Phaser.Scene {
       }
       if (compact && objective.threeStars.includes('180')) {
         return 'Goal: <=180 damage';
+      }
+      if (compact && objective.threeStars.includes('stagger')) {
+        return 'Goal: stagger boss 2x';
       }
       return `Next *** ${objective.threeStars}`;
     }

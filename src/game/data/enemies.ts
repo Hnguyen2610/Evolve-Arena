@@ -193,6 +193,18 @@ export const ENEMY_DEFINITIONS: Record<EnemyType, EnemyDefinition> = {
     tint: 0x5ee7ff,
     behavior: 'boss',
   },
+  'conductor-boss': {
+    type: 'conductor-boss',
+    name: 'Conductor',
+    health: 720,
+    speed: 65,
+    damage: 10,
+    xp: 200,
+    score: 1300,
+    radius: 54,
+    tint: 0x00ffff,
+    behavior: 'boss',
+  },
 };
 
 export const STANDARD_ENEMY_TYPES: EnemyType[] = [

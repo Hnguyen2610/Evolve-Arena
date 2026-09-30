@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { BOSS_VISUAL_ATLAS, registerBossVisualAnimations } from '../config/bossVisual';
 import { UI_DEPTH } from '../config/constants';
 import { ENEMY_VISUAL_ATLAS, registerEnemyVisualAnimations } from '../config/enemyVisual';
-import { PLAYER_VISUAL, registerPlayerVisualAnimations } from '../config/playerVisual';
+import { PLAYER_VISUAL } from '../config/playerVisual';
 import { COLORS, ENEMY_COLORS } from '../config/visual';
 import { gameStorage, platform } from '../services/PlatformServices';
 import { reconcilePersistedBestScore, setLatestSaveSnapshot } from '../services/PersistenceCoordinator';
@@ -31,9 +31,6 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.createTextures();
-    if (this.textures.exists(PLAYER_VISUAL.textureKey)) {
-      registerPlayerVisualAnimations(this.anims);
-    }
     if (this.textures.exists(ENEMY_VISUAL_ATLAS.textureKey)) {
       registerEnemyVisualAnimations(this.anims);
     }
@@ -437,6 +434,7 @@ export class BootScene extends Phaser.Scene {
     this.makeGlowTexture('rift-boss-glow', 190, 0xff68f0, 0.24);
     this.makeGlowTexture('forge-boss-glow', 198, 0xffa53d, 0.26);
     this.makeGlowTexture('grid-boss-glow', 198, 0x5ee7ff, 0.25);
+    this.makeGlowTexture('conductor-boss-glow', 198, 0x00ffff, 0.26);
     const size = 120;
     const graphics = this.add.graphics();
     const center = size / 2;
@@ -490,6 +488,49 @@ export class BootScene extends Phaser.Scene {
     this.makeRiftBossTexture();
     this.makeForgeBossTexture();
     this.makeGridBossTexture();
+    this.makeConductorBossTexture();
+  }
+
+  private makeConductorBossTexture(): void {
+    const size = 124;
+    const graphics = this.add.graphics();
+    const center = size / 2;
+    graphics.fillStyle(0x15002e, 1);
+    this.drawDiamond(graphics, center, center - 44, 88);
+    graphics.lineStyle(5, 0x00ffff, 0.85);
+    graphics.strokeCircle(center, center, 48);
+    graphics.lineStyle(2, 0xff00ff, 0.6);
+    graphics.strokeCircle(center, center, 34);
+    for (let i = 0; i < 4; i += 1) {
+      const angle = (Math.PI * 2 * i) / 4 + Math.PI / 4;
+      graphics.lineBetween(
+        center + Math.cos(angle) * 22,
+        center + Math.sin(angle) * 22,
+        center + Math.cos(angle) * 54,
+        center + Math.sin(angle) * 54,
+      );
+    }
+    graphics.fillStyle(0xff00ff, 1);
+    graphics.fillRect(center - 4, center - 40, 8, 30);
+    graphics.fillStyle(0x00ffff, 1);
+    graphics.fillCircle(center, center - 6, 13);
+    graphics.fillStyle(0x1a0033, 1);
+    graphics.fillCircle(center, center - 6, 6);
+    graphics.generateTexture('conductor-boss', size, size);
+    graphics.destroy();
+
+    const ring = this.add.graphics();
+    ring.lineStyle(5, 0x00ffff, 0.82);
+    for (let i = 0; i < 8; i += 1) {
+      const start = (Math.PI * 2 * i) / 8 + 0.05;
+      ring.beginPath();
+      ring.arc(64, 64, 57, start, start + Math.PI * 0.17);
+      ring.strokePath();
+    }
+    ring.lineStyle(2, 0xff00ff, 0.6);
+    ring.strokeCircle(64, 64, 42);
+    ring.generateTexture('conductor-boss-ring', 128, 128);
+    ring.destroy();
   }
 
   private makeRiftBossTexture(): void {

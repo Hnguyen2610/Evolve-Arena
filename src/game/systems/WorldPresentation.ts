@@ -2,7 +2,7 @@ import { UI_DEPTH, WORLD } from '../config/constants';
 
 export const WORLD_PRESENTATION = {
   elevationDegrees: 60,
-  verticalCompression: 0.5, // 60-degree elevation for strong 2.5D effect (cos(60°) = 0.5)
+  verticalCompression: 0.5, // 60-degree elevation for a lower, more isometric-feeling camera (cos(60°) = 0.5)
   horizonY: WORLD.height * 0.4, // Horizon at 40% screen height for tilted view
   platformMarginX: 96,
   platformMarginY: 74,
@@ -22,9 +22,12 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+export function projectY(y: number): number {
+  return WORLD_PRESENTATION.horizonY + (y - WORLD_PRESENTATION.horizonY) * WORLD_PRESENTATION.verticalCompression;
+}
+
 export function projectArenaPoint(x: number, y: number): PresentedPoint {
-  const compressedY = WORLD_PRESENTATION.horizonY + (y - WORLD_PRESENTATION.horizonY) * WORLD_PRESENTATION.verticalCompression;
-  return { x, y: compressedY };
+  return { x, y: projectY(y) };
 }
 
 export function getDepthScale(y: number, range = WORLD_PRESENTATION.maxDepthScale - WORLD_PRESENTATION.minDepthScale): number {
@@ -46,7 +49,7 @@ export function getGroundEffectDepth(y: number, offset = 0): number {
 }
 
 export function getGroundedVisualY(y: number, bob = 0, lift = 0): number {
-  return y + bob - lift;
+  return projectY(y) + bob - lift;
 }
 
 export function createPlatformPoints(): {

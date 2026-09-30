@@ -20,6 +20,7 @@ import {
   getGroundEffectDepth,
   getShadowDepth,
   getVisualDepth,
+  projectY,
   WORLD_PRESENTATION,
 } from '../systems/WorldPresentation';
 import { WORLD } from '../config/constants';
@@ -40,6 +41,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private readonly fxGlow: Phaser.FX.Glow | null;
   private readonly fxShadow: Phaser.FX.Shadow | null;
   private hurtFeedbackUntil = 0;
+private reflectionFeedbackUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, definition: EnemyDefinition, elite: boolean, scale: number) {
     const bossType = definition.behavior === 'boss';
@@ -63,6 +65,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       contactReadyAt: 0,
       chargeUntil: 0,
       telegraphUntil: 0,
+      stunUntil: 0,
+      shieldUntil: 0,
+      vulnerableDamageUntil: 0,
     };
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -73,26 +78,32 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.baseVisualScale = (this.bossVisualConfig?.scale ?? this.visualConfig?.scale ?? 1) * (elite ? 1.16 : 1);
     if (this.visualConfig && scene.textures.exists(ENEMY_VISUAL_ATLAS.textureKey)) {
       const startFrame = getEnemyVisualStartFrame(this.visualConfig);
-      this.visual = scene.add
-        .sprite(x, y, ENEMY_VISUAL_ATLAS.textureKey, startFrame)
-        .setDepth(8)
-        .setScale(this.baseVisualScale);
-      const animationKey = getEnemyVisualAnimationKey(this.visualConfig.enemyType);
-      if (scene.anims.exists(animationKey)) {
-        this.visual.play(animationKey);
+      if (scene.textures.get(ENEMY_VISUAL_ATLAS.textureKey).has(String(startFrame))) {
+        this.visual = scene.add
+          .sprite(x, y, ENEMY_VISUAL_ATLAS.textureKey, startFrame)
+          .setDepth(8)
+          .setScale(this.baseVisualScale);
+        const animationKey = getEnemyVisualAnimationKey(this.visualConfig.enemyType);
+        if (scene.anims.exists(animationKey)) {
+          this.visual.play(animationKey);
+        }
+        this.setVisible(false);
       }
-      this.setVisible(false);
     } else if (this.bossVisualConfig && scene.textures.exists(BOSS_VISUAL_ATLAS.textureKey)) {
       const startFrame = getBossVisualStartFrame(this.bossVisualConfig);
-      this.visual = scene.add
-        .sprite(x, y, BOSS_VISUAL_ATLAS.textureKey, startFrame)
-        .setDepth(9)
-        .setScale(this.baseVisualScale);
-      const animationKey = getBossVisualAnimationKey(this.bossVisualConfig.bossType, 'move');
-      if (scene.anims.exists(animationKey)) {
-        this.visual.play(animationKey);
+      // The atlas may not (yet) contain a row for every configured boss/enemy type; falling back to the
+      // procedurally generated base texture keeps the game playable instead of crashing on a missing frame.
+      if (scene.textures.get(BOSS_VISUAL_ATLAS.textureKey).has(String(startFrame))) {
+        this.visual = scene.add
+          .sprite(x, y, BOSS_VISUAL_ATLAS.textureKey, startFrame)
+          .setDepth(9)
+          .setScale(this.baseVisualScale);
+        const animationKey = getBossVisualAnimationKey(this.bossVisualConfig.bossType, 'move');
+        if (scene.anims.exists(animationKey)) {
+          this.visual.play(animationKey);
+        }
+        this.setVisible(false);
       }
-      this.setVisible(false);
     }
     // Enhanced depth-aware shadow for better grounding
     const shadowLength = 0.6 + 0.4 * ((y - WORLD_PRESENTATION.horizonY) / (WORLD.height - WORLD_PRESENTATION.horizonY));
@@ -129,16 +140,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const shadowLength = 0.6 + 0.4 * ((this.y - WORLD_PRESENTATION.horizonY) / (WORLD.height - WORLD_PRESENTATION.horizonY));
     const shadowOffset = this.dataModel.radius * 0.68 + shadowLength * 10; // Base offset + depth-based length
     const shadowVerticalScale = (this.isBossType() ? 0.9 : this.dataModel.elite ? 0.72 : 0.6) * (0.3 + shadowLength * 0.7); // Base scale + depth-based stretching
+    const groundY = projectY(this.y);
 
     this.shadow
       .setDepth(getShadowDepth(this.y))
-      .setPosition(this.x, this.y + shadowOffset)
+      .setPosition(this.x, groundY + shadowOffset)
       .setScale(this.isBossType() ? this.scaleX * 1.38 : this.scaleX, shadowVerticalScale * this.scaleY)
       .setVisible(this.active);
     if (this.eliteRing) {
       this.eliteRing
         .setDepth(getGroundEffectDepth(this.y, 0.3))
-        .setPosition(this.x, this.y)
+        .setPosition(this.x, groundY)
         .setRotation(-time / 520)
         .setScale(this.scaleX * (0.84 + Math.sin(time / 260) * 0.035))
         .setVisible(this.active);
@@ -151,7 +163,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       const instability = 1 - healthRatio;
       this.glow
         .setDepth(getGroundEffectDepth(this.y, 0.45))
-        .setPosition(this.x, this.y - this.dataModel.radius * 0.12)
+        .setPosition(this.x, groundY - this.dataModel.radius * 0.12)
         .setScale(this.scaleX * (1.14 + Math.sin(time / (240 - instability * 90)) * (0.04 + instability * 0.05)))
         .setAlpha(0.35 + instability * 0.26)
         .setVisible(this.active);
@@ -169,11 +181,18 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       const instability = 1 - healthRatio;
       this.bossRing
         .setDepth(getGroundEffectDepth(this.y, 0.8))
-        .setPosition(this.x, this.y)
+        .setPosition(this.x, groundY)
         .setRotation(time / (charging ? 230 : 720 - instability * 240))
         .setScale(this.scaleX * (1.16 + Math.sin(time / 190) * (charging ? 0.045 : 0.018 + instability * 0.02)))
         .setAlpha(charging ? 1 : 0.76 + instability * 0.18)
         .setVisible(this.active);
+    }
+
+    // If stunned, set velocity to 0 to prevent movement
+    const now = this.scene.time.now;
+    if (now < this.dataModel.stunUntil) {
+      const body = this.body as Phaser.Physics.Arcade.Body | null;
+      body?.setVelocity(0);
     }
   }
 
@@ -186,6 +205,41 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       targets: target,
       alpha: 0.48,
       duration: 55,
+      yoyo: true,
+      onComplete: () => {
+        target.clearTint();
+        target.setAlpha(this.alpha);
+      },
+    });
+  }
+
+  showReflectionFeedback(): void {
+    const target = this.visual ?? this;
+    this.reflectionFeedbackUntil = this.scene.time.now + 200;
+    // Yellow tint for reflection feedback
+    target.setTint(0xffff00);
+    this.scene.tweens.killTweensOf(target);
+    this.scene.tweens.add({
+      targets: target,
+      alpha: 0.7,
+      duration: 100,
+      yoyo: true,
+      onComplete: () => {
+        target.clearTint();
+        target.setAlpha(this.alpha);
+      },
+    });
+  }
+
+  showPulseStunFeedback(): void {
+    const target = this.visual ?? this;
+    // Cyan tint for Nexus Pulse stun/vulnerable feedback
+    target.setTint(0x00ffff);
+    this.scene.tweens.killTweensOf(target);
+    this.scene.tweens.add({
+      targets: target,
+      alpha: 0.6,
+      duration: 120,
       yoyo: true,
       onComplete: () => {
         target.clearTint();
@@ -312,11 +366,43 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.dataModel.type === 'grid-boss') {
       return `grid-boss-${kind}`;
     }
+    if (this.dataModel.type === 'conductor-boss') {
+      return `conductor-boss-${kind}`;
+    }
     return `boss-${kind}`;
   }
 
   private isBossType(): boolean {
     return this.dataModel.behavior === 'boss';
+  }
+
+  /**
+   * Returns the damage multiplier based on current shield and vulnerable states.
+   * < 1.0 means damage reduction, > 1.0 means damage increase.
+   */
+  getDamageMultiplier(): number {
+    const now = this.scene.time.now;
+
+    // Handle shield state
+    const isShielded = now < this.dataModel.shieldUntil;
+
+    // Handle vulnerable state (different logic for regular enemies vs Conductor boss)
+    let isVulnerable = false;
+    if (this.isBossType() && this.dataModel.type === 'conductor-boss') {
+      // For Conductor boss, vulnerability starts after shield ends and lasts for vulnerableDuration
+      isVulnerable = now >= this.dataModel.shieldUntil && now < this.dataModel.vulnerableDamageUntil;
+    } else {
+      // For regular enemies, vulnerability follows stun period
+      isVulnerable = now < this.dataModel.vulnerableDamageUntil && now >= this.dataModel.stunUntil;
+    }
+
+    if (isShielded) {
+      return 0.5; // 50% damage reduction
+    }
+    if (isVulnerable) {
+      return 2.0; // 100% damage increase
+    }
+    return 1.0; // normal damage
   }
 
   disableBody(disableGameObject?: boolean, hideGameObject?: boolean): this {

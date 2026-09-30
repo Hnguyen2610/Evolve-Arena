@@ -7,6 +7,7 @@ import {
   getShadowDepth,
   getVisualDepth,
   projectArenaPoint,
+  projectY,
   WORLD_PRESENTATION,
 } from './WorldPresentation';
 
@@ -38,7 +39,12 @@ describe('WorldPresentation', () => {
 
   it('scales lower screen actors slightly larger for depth without affecting gameplay position', () => {
     expect(getDepthScale(WORLD.height)).toBeGreaterThan(getDepthScale(0));
-    expect(getGroundedVisualY(640, 3, 12)).toBe(631);
+    expect(getGroundedVisualY(WORLD_PRESENTATION.horizonY, 3, 12)).toBe(WORLD_PRESENTATION.horizonY + 3 - 12);
+  });
+
+  it('projects an entity\'s visual Y toward the horizon the same way the arena background is projected', () => {
+    expect(getGroundedVisualY(1200, 0, 0)).toBeCloseTo(projectY(1200), 5);
+    expect(getGroundedVisualY(1200, 0, 0)).toBeLessThan(1200);
   });
 
   it('builds a raised platform with bottom edge below the visual surface', () => {

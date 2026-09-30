@@ -8,7 +8,12 @@ type AudioEvent =
   | 'bossSpawn'
   | 'bossAttack'
   | 'gameOver'
-  | 'victory';
+  | 'victory'
+  | 'nexusCharge'
+  | 'nexusWarning'
+  | 'nexusPulse'
+  | 'nexusCooldown'
+  | 'nexusReflect';
 
 const AUDIO_EVENT_FREQUENCIES: Record<AudioEvent, number> = {
   shot: 520,
@@ -21,6 +26,11 @@ const AUDIO_EVENT_FREQUENCIES: Record<AudioEvent, number> = {
   bossAttack: 150,
   gameOver: 95,
   victory: 1040,
+  nexusCharge: 440,
+  nexusWarning: 660,
+  nexusPulse: 320,
+  nexusCooldown: 220,
+  nexusReflect: 480, // Reflection sound frequency
 };
 
 export interface GameAudio {

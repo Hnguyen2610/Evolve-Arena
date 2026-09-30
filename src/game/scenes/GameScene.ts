@@ -35,6 +35,7 @@ import {
 import {
   createPlatformPoints,
   projectArenaPoint,
+  projectY,
   getDepthScale,
   getVisualDepth,
   WORLD_PRESENTATION,
@@ -74,10 +75,16 @@ const ENERGY_NODE_TYPE: EnemyType = 'energy-node';
 const GUARDIAN_LINK_RANGE = 175;
 const GUARDIAN_PROTECTION_MULTIPLIER = 0.68;
 
+
 export class GameScene extends Phaser.Scene {
   private save: GameSaveData = cloneDefaultSave();
   private mode: GameMode = 'playing';
   private player!: Player;
+  // Ghost target the camera follows instead of the player directly: sits at the player's X but at
+  // the same horizon-projected Y used to render entities (WorldPresentation.projectY), so the
+  // camera stays correctly composed with the compressed 2.5D scene everywhere on the map, not just
+  // near spawn. Gameplay/physics always read this.player.x/y (raw) — this proxy is visual-only.
+  private cameraTarget!: Phaser.GameObjects.Zone;
   private stats!: PlayerStats;
   private desktopInput!: DesktopInput;
   private touchInput!: TouchInput;
@@ -137,6 +144,13 @@ export class GameScene extends Phaser.Scene {
   private overloadEvents = 0;
   private overloadHits = 0;
   private overloadDamageTaken = 0;
+  private nexusPulseState: 'charge' | 'warning' | 'pulse' | 'cooldown' = 'charge';
+  private nexusPulseTimer = 0;
+  private nexusPulseRadius = 0;
+  private nexusPulseCycle = 0;
+  private readonly nexusPulseExpansionSpeed = 2600;
+  private readonly nexusPulseMaxRadius = 1300;
+  private conductorBossStaggeredByPulse = 0;
 
   constructor() {
     super('GameScene');
@@ -160,7 +174,10 @@ export class GameScene extends Phaser.Scene {
     this.createGroups();
     this.player = new Player(this, WORLD.width / 2, WORLD.height / 2, this.stats);
     this.player.updateEvolutionVisuals(this.upgrades);
-    this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height).startFollow(this.player, true, 0.12, 0.12);
+    this.cameraTarget = this.add.zone(this.player.x, projectY(this.player.y), 1, 1);
+    this.cameras.main
+      .setBounds(0, 0, WORLD.width, WORLD.height)
+      .startFollow(this.cameraTarget, true, 0.12, 0.12);
     this.desktopInput = new DesktopInput(this);
     this.touchInput = new TouchInput(this);
     this.hud = new HUD(this);
@@ -214,6 +231,11 @@ export class GameScene extends Phaser.Scene {
     this.overloadEvents = 0;
     this.overloadHits = 0;
     this.overloadDamageTaken = 0;
+    this.nexusPulseState = 'charge';
+    this.nexusPulseTimer = 0;
+    this.nexusPulseRadius = 0;
+    this.nexusPulseCycle = 0;
+    this.conductorBossStaggeredByPulse = 0;
     this.stageHazards.forEach((hazard) => {
       hazard.zone.destroy();
       hazard.core.destroy();
@@ -231,11 +253,13 @@ export class GameScene extends Phaser.Scene {
     this.updateArenaVisuals(time);
     this.updateArenaShift(time);
     this.updatePlayer();
+    this.cameraTarget.setPosition(this.player.x, projectY(this.player.y));
     this.updateSpawning(time);
     this.updateEnemies(time, deltaSeconds);
     this.updateEnergyNodes(time);
     this.drawGuardianLinks();
     this.updateStageHazards(time);
+    this.updateNexusPulse(time, deltaSeconds);
     this.updateProjectiles(time);
     this.updateXpOrbs(deltaSeconds);
     this.tryAutoAttack(time);
@@ -252,6 +276,9 @@ export class GameScene extends Phaser.Scene {
     const theme = this.stage.visualTheme;
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
     this.graphics = this.add.graphics().setDepth(UI_DEPTH.world);
+    this.arenaFx = this.add.graphics().setDepth(UI_DEPTH.world + 1);
+    this.foregroundFx = this.add.graphics().setDepth(UI_DEPTH.effects - 1);
+    this.foregroundDepthFx = this.add.graphics().setDepth(UI_DEPTH.effects - 3);
     this.graphics.fillStyle(theme.backgroundDeep, 1);
     this.graphics.fillRect(0, 0, WORLD.width, WORLD.height);
     this.drawRaisedArenaPlatform(theme);
@@ -275,16 +302,11 @@ export class GameScene extends Phaser.Scene {
     this.graphics.fillStyle(theme.arenaMark, 0.06);
     this.graphics.fillEllipse(projectedCenter.x, projectedCenter.y, 184, 184 * WORLD_PRESENTATION.verticalCompression);
     this.drawDepthProps(theme);
-    this.arenaFx = this.add.graphics().setDepth(UI_DEPTH.world + 1);
-    this.foregroundFx = this.add.graphics().setDepth(UI_DEPTH.effects - 1);
-    this.foregroundDepthFx = this.add.graphics().setDepth(UI_DEPTH.effects - 3);
     this.drawForegroundDepthProps(theme);
   }
 
   private drawRaisedArenaPlatform(theme: StageDefinition['visualTheme']): void {
     const platform = createPlatformPoints();
-
-    // Base platform rendering
     this.graphics.fillStyle(theme.backgroundDeep, 0.54);
     this.graphics.fillPoints(platform.surface.map((point) => new Phaser.Geom.Point(point.x + 36, point.y + 66)), true);
     this.graphics.fillStyle(theme.bossShell, 0.26);
@@ -1160,17 +1182,22 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tryAutoAttack(time: number): void {
-    if (time < this.nextAttackAt) {
-      return;
-    }
-
     const target = this.findTarget();
     if (!target) {
       return;
     }
 
-    this.nextAttackAt = time + 1000 / this.stats.attackSpeed;
     const baseAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
+    // Face and aim at the target every frame (not just when a shot actually fires) so the
+    // character visibly tracks and points its weapon at whoever it's fighting, rather than only
+    // snapping to face them once per attack-cooldown cycle.
+    this.player.faceAttackTarget(target);
+    this.player.aimAt(baseAngle);
+    if (time < this.nextAttackAt) {
+      return;
+    }
+
+    this.nextAttackAt = time + 1000 / this.stats.attackSpeed;
     const count = this.stats.projectileCount;
     const damageScale = calculateProjectileVolleyDamageScale(count);
     for (let i = 0; i < count; i += 1) {
@@ -1309,8 +1336,12 @@ export class GameScene extends Phaser.Scene {
   ): void {
     const data = enemy.dataModel;
     const protectedByGuardian = data.type === ENERGY_NODE_TYPE && this.isEnergyNodeProtected(enemy);
-    const finalAmount = protectedByGuardian ? amount * GUARDIAN_PROTECTION_MULTIPLIER : amount;
+    const nexusDamageMultiplier = enemy.getDamageMultiplier();
+    const finalAmount = (protectedByGuardian ? amount * GUARDIAN_PROTECTION_MULTIPLIER : amount) * nexusDamageMultiplier;
     data.health -= finalAmount;
+    if (nexusDamageMultiplier > 1) {
+      playtestTelemetry.recordNexusPulseVulnerableDamage(this.nexusPulseCycle, finalAmount, this.elapsedSeconds);
+    }
     this.showDamage(enemy.x, enemy.y, Math.floor(finalAmount), critical ? cssColor(COLORS.critical) : data.elite ? '#fff5a8' : '#ffffff', critical);
     if (protectedByGuardian) {
       this.createGuardianShieldPulse(enemy.x, enemy.y);
@@ -1767,6 +1798,135 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private updateNexusPulse(time: number, deltaSeconds: number): void {
+    // Nexus Pulse Synchronization mechanic (Stage 5 only)
+    // Cycle: charge (8s) -> warning (2s) -> pulse (0.5s) -> cooldown (9.5s) = 20s total
+    if (this.stage.boss.type !== 'conductor-boss') {
+      return;
+    }
+
+    // Update timer
+    this.nexusPulseTimer += deltaSeconds;
+
+    // State machine transitions
+    if (this.nexusPulseState === 'charge' && this.nexusPulseTimer >= 8.0) {
+      this.nexusPulseState = 'warning';
+      this.nexusPulseTimer = 0;
+      this.audio.play('nexusCharge'); // Charge complete sound
+    } else if (this.nexusPulseState === 'warning' && this.nexusPulseTimer >= 2.0) {
+      this.nexusPulseState = 'pulse';
+      this.nexusPulseTimer = 0;
+      this.nexusPulseRadius = 0; // Reset radius for pulse expansion
+      this.audio.play('nexusWarning'); // Warning complete sound
+    } else if (this.nexusPulseState === 'pulse' && this.nexusPulseTimer >= 0.5) {
+      this.nexusPulseState = 'cooldown';
+      this.nexusPulseTimer = 0;
+      this.audio.play('nexusPulse'); // Pulse complete sound
+    } else if (this.nexusPulseState === 'cooldown' && this.nexusPulseTimer >= 9.5) {
+      this.nexusPulseState = 'charge';
+      this.nexusPulseTimer = 0;
+      this.nexusPulseCycle++;
+      this.audio.play('nexusCooldown'); // Cooldown complete sound
+    }
+
+    // Handle pulse phase logic
+    if (this.nexusPulseState === 'pulse') {
+      // Expand the pulse wave during the pulse phase
+      this.nexusPulseRadius += this.nexusPulseExpansionSpeed * deltaSeconds;
+      // Clamp to max radius
+      this.nexusPulseRadius = Math.min(this.nexusPulseRadius, this.nexusPulseMaxRadius);
+
+      // Draw the pulse wave visual effect
+      this.drawNexusPulseWave();
+
+      // Check for enemy hits during pulse
+      this.enemies.getChildren().forEach((gameObject) => {
+        const enemy = gameObject as Enemy;
+        if (!enemy.active) return;
+
+        // Calculate distance from enemy to Nexus center
+        const dx = enemy.x - WORLD.width / 2;
+        const dy = enemy.y - WORLD.height / 2;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Check if enemy is hit by pulse wave (within radius tolerance)
+        const radiusTolerance = 15; // pixels tolerance for hit detection
+        if (Math.abs(distance - this.nexusPulseRadius) <= radiusTolerance) {
+          // Handle boss-specific logic
+          if (enemy.dataModel.type === 'conductor-boss') {
+            if (this.nexusPulseState === 'pulse') {
+              // Apply shield to the boss (shield lasts for remainder of pulse phase + cooldown vulnerability period)
+              // Shield duration: 0.5 seconds (to cover pulse phase)
+              // Vulnerability duration: 9.5 seconds (to cover cooldown phase)
+              enemy.dataModel.shieldUntil = time + 500; // 0.5 seconds shield
+              enemy.dataModel.vulnerableDamageUntil = time + 500 + 9500; // 0.5s shield + 9.5s vulnerability
+              // Log boss stagger (using seconds for telemetry) and increment counter
+              playtestTelemetry.recordConductorBossStaggeredByPulse(1, time / 1000);
+              playtestTelemetry.incrementConductorBossStaggeredByPulse(1);
+              this.conductorBossStaggeredByPulse += 1;
+              // Do not apply stun to boss during pulse (shielded handles the hit)
+
+              // Implement pulse wave reflection
+              this.audio.play('nexusReflect');
+              // Add visual reflection effect
+              enemy.showReflectionFeedback();
+            }
+          } else {
+            // Non-boss enemy: apply stun and vulnerable
+            // Apply stun effect (1.5 seconds)
+            enemy.dataModel.stunUntil = time + 1500;
+
+            // Apply vulnerable effect (5 seconds after stun ends)
+            enemy.dataModel.vulnerableDamageUntil = time + 1500 + 5000; // 1.5s stun + 5s vulnerable
+
+            // Log telemetry (using seconds for telemetry)
+            playtestTelemetry.recordNexusPulseHitEnemy(this.nexusPulseCycle, 1, time / 1000);
+
+            // Visual feedback for hit enemy
+            enemy.showPulseStunFeedback();
+          }
+        }
+      });
+    }
+  }
+
+  private drawNexusPulseWave(): void {
+    // Draw the expanding pulse wave circle
+    const centerX = WORLD.width / 2;
+    const centerY = WORLD.height / 2;
+    const projectedCenter = projectArenaPoint(centerX, centerY);
+
+    // Only draw during pulse phase
+    if (this.nexusPulseState === 'pulse') {
+      // Pulse wave color from visual theme (cyan)
+      const pulseColor = this.stage.visualTheme.phase2; // 0x00ffff (cyan)
+
+      // Create expanding circle effect and fade it out so it doesn't accumulate frame after frame
+      const pulseRing = this.add.circle(
+        projectedCenter.x,
+        projectedCenter.y,
+        this.nexusPulseRadius * getDepthScale(projectedCenter.y, 0),
+        pulseColor,
+        0.1
+      ).setDepth(getVisualDepth(projectedCenter.y, 0));
+      this.tweens.add({
+        targets: pulseRing,
+        alpha: 0,
+        duration: 180,
+        ease: 'Sine.Out',
+        onComplete: () => pulseRing.destroy(),
+      });
+
+      // Add pulse ring to graphics for proper cleanup
+      this.graphics.lineStyle(2, pulseColor, 0.2);
+      this.graphics.strokeCircle(
+        projectedCenter.x,
+        projectedCenter.y,
+        this.nexusPulseRadius * getDepthScale(projectedCenter.y, 0) * WORLD_PRESENTATION.verticalCompression
+      );
+    }
+  }
+
   private updateBoss(time: number): void {
     if (!this.boss?.active) {
       this.bossBar.hide();
@@ -2180,6 +2340,7 @@ export class GameScene extends Phaser.Scene {
       overloadEvents: this.overloadEvents,
       overloadHits: this.overloadHits,
       overloadDamageTaken: this.overloadDamageTaken,
+      conductorBossStaggeredByPulse: this.conductorBossStaggeredByPulse,
     };
     const chapter = getChapterForStage(this.stage.id);
     const clearedStageIds = new Set([...this.save.clearedStageIds, this.stage.id]);

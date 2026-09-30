@@ -20,6 +20,7 @@ const result: RunResult = {
   overloadEvents: 0,
   overloadHits: 0,
   overloadDamageTaken: 0,
+  conductorBossStaggeredByPulse: 0,
 };
 
 function createService(): PlaytestTelemetryService {

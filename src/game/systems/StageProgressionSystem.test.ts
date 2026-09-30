@@ -92,4 +92,36 @@ describe('StageProgressionSystem', () => {
     expect(outcome.chapterRewardCoins).toBe(0);
     expect(isChapterCleared(outcome.save, 'chapter-2')).toBe(false);
   });
+
+  it('clearing stage 4 unlocks stage 5 exactly once', () => {
+    const save = {
+      ...cloneDefaultSave(),
+      unlockedStageIds: ['stage-1', 'stage-2', 'stage-3', 'stage-4'] satisfies StageId[],
+      clearedStageIds: ['stage-1', 'stage-2', 'stage-3'] satisfies StageId[],
+      clearedChapterIds: ['chapter-1'] satisfies ChapterId[],
+    };
+    const firstClear = markStageCleared(save, 'stage-4');
+    const secondClear = markStageCleared(firstClear.save, 'stage-4');
+
+    expect(firstClear.newlyUnlockedStageId).toBe('stage-5');
+    expect(firstClear.save.unlockedStageIds).toEqual(['stage-1', 'stage-2', 'stage-3', 'stage-4', 'stage-5']);
+    expect(secondClear.newlyUnlockedStageId).toBeNull();
+  });
+
+  it('clearing stage 5 does not unlock stage 6 and does not complete chapter 2', () => {
+    const save = {
+      ...cloneDefaultSave(),
+      unlockedStageIds: ['stage-1', 'stage-2', 'stage-3', 'stage-4', 'stage-5'] satisfies StageId[],
+      clearedStageIds: ['stage-1', 'stage-2', 'stage-3', 'stage-4'] satisfies StageId[],
+      clearedChapterIds: ['chapter-1'] satisfies ChapterId[],
+    };
+    const outcome = applyStageVictoryProgression(save, 'stage-5');
+
+    expect(outcome.stageRewardCoins).toBe(130);
+    expect(outcome.newlyUnlockedStageId).toBeNull();
+    expect(outcome.save.unlockedStageIds).not.toContain('stage-6');
+    expect(outcome.completedChapterId).toBeNull();
+    expect(outcome.chapterRewardCoins).toBe(0);
+    expect(isChapterCleared(outcome.save, 'chapter-2')).toBe(false);
+  });
 });

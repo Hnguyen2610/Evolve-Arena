@@ -70,6 +70,18 @@ export const STAGE_MASTERY_RULES: Record<StageId, StageMasteryRule> = {
     performanceRequirement: 'take 3 or fewer overload hits',
     meetsPerformanceTarget: (result) => result.overloadEvents >= 2 && result.overloadHits <= 3,
   },
+  'stage-5': {
+    identity: 'SYNC',
+    timeTargetSeconds: 110,
+    performanceRequirement: 'stagger the boss with pulse waves 2 or more times',
+    meetsPerformanceTarget: (result) => result.conductorBossStaggeredByPulse >= 2,
+  },
+  'stage-6': {
+    identity: 'CONVERGE',
+    timeTargetSeconds: 122,
+    performanceRequirement: 'destroy 3 Energy Nodes and take 3 or fewer overload hits',
+    meetsPerformanceTarget: (result) => result.energyNodesDestroyed >= 3 && result.overloadHits <= 3,
+  },
 };
 
 export function evaluateStageMastery(result: RunResult): StageMasteryEvaluation {

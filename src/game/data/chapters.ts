@@ -15,7 +15,7 @@ export const CHAPTER_DEFINITIONS: Record<ChapterId, ChapterDefinition> = {
     number: 2,
     name: 'Overdrive Sector',
     subtitle: 'Adaptive grids and unstable combat protocols.',
-    stageIds: ['stage-4'],
+    stageIds: ['stage-4', 'stage-5'],
     unlocksAfterChapterId: 'chapter-1',
     completionReward: 0,
     completeWhenAllStagesCleared: false,

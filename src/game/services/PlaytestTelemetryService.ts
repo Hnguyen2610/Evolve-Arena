@@ -21,7 +21,12 @@ export type PlaytestEventName =
   | 'stage_record_improved'
   | 'player_died'
   | 'run_completed'
-  | 'replay_started';
+  | 'replay_started'
+  | 'nexus_pulse_emitted'
+  | 'nexus_pulse_hit_enemy'
+  | 'nexus_pulse_vulnerable_damage'
+  | 'conductor_boss_staggered_by_pulse'
+  | 'stage_5_mastery_attempt';
 
 export interface UpgradeSelectionTelemetry {
   upgradeId: string;
@@ -76,6 +81,7 @@ export interface PlaytestRunTelemetry {
   newBestClearTime: boolean;
   upgradesSelected: UpgradeSelectionTelemetry[];
   events: PlaytestEvent[];
+  conductorBossStaggeredByPulse: number;
 }
 
 export interface PlaytestSessionSummary {
@@ -201,6 +207,7 @@ export class PlaytestTelemetryService {
       newBestClearTime: false,
       upgradesSelected: [],
       events: [],
+      conductorBossStaggeredByPulse: 0,
     };
 
     this.recordEvent(source === 'replay' ? 'replay_started' : 'game_started', 0);
@@ -336,6 +343,48 @@ export class PlaytestTelemetryService {
     this.currentRun.overloadHits += 1;
     this.currentRun.overloadDamageTaken += Math.max(0, damageTaken);
     this.recordEvent('overload_hit', seconds, { damageTaken: roundSeconds(damageTaken) });
+  }
+
+  recordNexusPulseEmitted(pulseNumber: number, seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.recordEvent('nexus_pulse_emitted', seconds, { pulseNumber });
+  }
+
+  recordNexusPulseHitEnemy(pulseNumber: number, enemyCount: number, seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.recordEvent('nexus_pulse_hit_enemy', seconds, { pulseNumber, enemyCount });
+  }
+
+  recordNexusPulseVulnerableDamage(pulseNumber: number, damage: number, seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.recordEvent('nexus_pulse_vulnerable_damage', seconds, { pulseNumber, damage });
+  }
+
+  recordConductorBossStaggeredByPulse(count: number, seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.recordEvent('conductor_boss_staggered_by_pulse', seconds, { count });
+  }
+
+  incrementConductorBossStaggeredByPulse(count: number = 1): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.currentRun.conductorBossStaggeredByPulse += count;
+  }
+
+  recordStage5MasteryAttempt(objective: string, success: boolean, seconds: number): void {
+    if (!this.currentRun) {
+      return;
+    }
+    this.recordEvent('stage_5_mastery_attempt', seconds, { objective, success });
   }
 
   recordChapterCompleted(chapterId: ChapterId, seconds: number): void {

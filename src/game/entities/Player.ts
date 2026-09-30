@@ -1,11 +1,5 @@
 import Phaser from 'phaser';
-import {
-  getPlayerVisualAnimationKey,
-  getPlayerVisualDirection,
-  PLAYER_VISUAL,
-  type PlayerVisualDirection,
-  type PlayerVisualMotion,
-} from '../config/playerVisual';
+import { getPlayerVisualDirection, getPlayerVisualFrame, PLAYER_VISUAL, type PlayerVisualDirection } from '../config/playerVisual';
 import { COLORS } from '../config/visual';
 import {
   getDepthScale,
@@ -13,11 +7,19 @@ import {
   getGroundEffectDepth,
   getShadowDepth,
   getVisualDepth,
+  projectY,
   WORLD_PRESENTATION,
 } from '../systems/WorldPresentation';
 import { WORLD } from '../config/constants';
 import type { PlayerStats, UpgradeState } from '../types';
 import { addGlowFx, addShadowFx } from '../utils/phaserFx';
+
+const FACING_ANGLES: Record<PlayerVisualDirection, number> = {
+  east: 0,
+  south: Math.PI / 2,
+  west: Math.PI,
+  north: -Math.PI / 2,
+};
 
 interface PlayerEvolutionVisuals {
   totalLevels: number;
@@ -31,7 +33,9 @@ interface PlayerEvolutionVisuals {
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   stats: PlayerStats;
-  private readonly visual: Phaser.GameObjects.Sprite;
+  private readonly visualUpper: Phaser.GameObjects.Sprite;
+  private readonly visualLegs: Phaser.GameObjects.Sprite;
+  private readonly hasSplitVisual: boolean;
   private readonly glow: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Ellipse;
   private readonly energyField: Phaser.GameObjects.Arc;
@@ -54,6 +58,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private facing: PlayerVisualDirection = 'south';
   private lastMoveAngle = Math.PI / 2;
   private hurtFeedbackUntil = 0;
+  // Continuous (not 4-direction) aim angle for the weapon sprite, in radians (0 = east, matching
+  // Phaser.Math.Angle.Between). Falls back to the current facing direction when nothing has aimed
+  // it this frame -- see aimAt() and preUpdate().
+  private aimAngle = Math.PI / 2;
+  private aimedThisFrame = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number, stats: PlayerStats) {
     super(scene, x, y, PLAYER_VISUAL.fallbackTextureKey);
@@ -70,17 +79,25 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     for (let index = 0; index < 4; index += 1) {
       this.orbiters.push(scene.add.image(x, y, 'spark').setDepth(12).setAlpha(0).setScale(0.7).setTint(COLORS.playerProjectileCore));
     }
-    this.glow = scene.add.image(x, y, 'player-glow').setDepth(9).setAlpha(0.72);
-    const visualTexture = scene.textures.exists(PLAYER_VISUAL.textureKey) ? PLAYER_VISUAL.textureKey : PLAYER_VISUAL.fallbackTextureKey;
-    this.visual = scene.add.sprite(x, y, visualTexture).setDepth(10).setScale(PLAYER_VISUAL.renderScale);
-    this.playVisualAnimation('idle');
+    this.glow = scene.add.image(x, y, 'player-glow').setDepth(9).setAlpha(0.42).setScale(0.75);
+    this.hasSplitVisual = scene.textures.exists(PLAYER_VISUAL.textureKey);
+    const visualTexture = this.hasSplitVisual ? PLAYER_VISUAL.textureKey : PLAYER_VISUAL.fallbackTextureKey;
+    const upperFrame = this.hasSplitVisual ? getPlayerVisualFrame(this.facing, PLAYER_VISUAL.upperRow) : undefined;
+    const legsFrame = this.hasSplitVisual ? getPlayerVisualFrame(this.facing, PLAYER_VISUAL.legsRow) : undefined;
+    this.visualUpper = scene.add.sprite(x, y, visualTexture, upperFrame).setDepth(10).setScale(PLAYER_VISUAL.renderScale);
+    this.visualLegs = scene.add
+      .sprite(x, y, visualTexture, legsFrame)
+      .setDepth(10)
+      .setScale(PLAYER_VISUAL.renderScale)
+      .setOrigin(PLAYER_VISUAL.legsPivotXFraction, PLAYER_VISUAL.legsPivotYFraction)
+      .setVisible(this.hasSplitVisual);
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setDepth(10).setVisible(false);
     this.setCollideWorldBounds(true);
     this.setCircle(PLAYER_VISUAL.collisionRadius, (this.width - PLAYER_VISUAL.collisionRadius * 2) / 2, (this.height - PLAYER_VISUAL.collisionRadius * 2) / 2);
-    this.fxGlow = addGlowFx(scene, this.visual, COLORS.playerProjectileCore, 1.2, 0.18);
-    this.fxShadow = addShadowFx(scene, this.visual, COLORS.playerGlow, 0.18);
+    this.fxGlow = addGlowFx(scene, this.visualUpper, COLORS.playerProjectileCore, 1.2, 0.18);
+    this.fxShadow = addShadowFx(scene, this.visualUpper, COLORS.playerGlow, 0.18);
   }
 
   applyInput(vector: Phaser.Math.Vector2): void {
@@ -92,20 +109,41 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  /** Points the weapon at an exact angle in radians (0 = east), e.g. the current attack target.
+   * Call every frame there's a target -- if it isn't called in a given frame, the weapon falls
+   * back to matching the character's 4-direction facing instead of freezing at a stale angle. */
+  aimAt(angle: number): void {
+    this.aimAngle = angle;
+    this.aimedThisFrame = true;
+  }
+
+  /** Faces the character toward an attack target (e.g. the current auto-attack target). Called
+   * after movement each frame so it takes priority: the player visibly aims at whoever they're
+   * fighting even while strafing in a different direction, and falls back to movement-facing
+   * again once no target remains in range. */
+  faceAttackTarget(target: { x: number; y: number }): void {
+    const dx = target.x - this.x;
+    const dy = target.y - this.y;
+    this.facing = getPlayerVisualDirection({ x: dx, y: dy, lengthSq: () => dx * dx + dy * dy }, this.facing);
+  }
+
   showHurtFeedback(): void {
     this.hurtFeedbackUntil = this.scene.time.now + 140;
-    this.visual.setTint(0xfff2f5);
-    this.scene.tweens.killTweensOf(this.visual);
+    const targets = [this.visualUpper, this.visualLegs];
+    targets.forEach((target) => target.setTint(0xfff2f5));
+    this.scene.tweens.killTweensOf(targets);
     this.scene.tweens.add({
-      targets: this.visual,
+      targets,
       alpha: 0.62,
       scaleX: PLAYER_VISUAL.renderScale * 1.08,
       scaleY: PLAYER_VISUAL.renderScale * 0.92,
       duration: 58,
       yoyo: true,
       onComplete: () => {
-        this.visual.clearTint();
-        this.visual.setAlpha(1);
+        targets.forEach((target) => {
+          target.clearTint();
+          target.setAlpha(1);
+        });
       },
     });
   }
@@ -134,6 +172,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+    if (!this.aimedThisFrame) {
+      this.aimAngle = FACING_ANGLES[this.facing];
+    }
+    this.aimedThisFrame = false;
     const tier = Math.min(1, this.evolution.totalLevels / 7);
     const offense = Math.min(1, this.evolution.offenseLevels / 7);
     const cadence = Math.max(92, 190 - this.evolution.attackSpeedLevels * 13);
@@ -145,15 +187,44 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const visualDepth = getVisualDepth(this.y, 1.2);
     const footLift = 15 + tier * 3;
     const bob = this.moving ? Math.sin(time / 105) * 1.4 : Math.sin(time / 310) * 0.65;
+    const groundY = projectY(this.y);
 
-    this.playVisualAnimation(this.moving ? 'run' : 'idle');
-    this.visual
+    // getPlayerVisualDirection picks whichever of the 4 sprite rows is nearest the actual aim
+    // angle (its dominant-axis rule is exactly "nearest cardinal by angle"), so this remainder is
+    // always within +-45 degrees -- a small, natural-looking twist on top of the correct pose
+    // rather than the character tipping over. This turns the 4-pose sprite into a continuous
+    // 360-degree-facing character without needing new art.
+    const rotationDelta = Phaser.Math.Angle.Wrap(this.aimAngle - FACING_ANGLES[this.facing]);
+
+    if (this.hasSplitVisual) {
+      this.visualUpper.setFrame(getPlayerVisualFrame(this.facing, PLAYER_VISUAL.upperRow));
+      this.visualLegs.setFrame(getPlayerVisualFrame(this.facing, PLAYER_VISUAL.legsRow));
+    }
+    const upperY = getGroundedVisualY(this.y, bob, footLift);
+    const scaleX = baseScale * (1 + moveLean * 0.25);
+    const scaleY = baseScale * squash;
+    // Legs are a separate sprite pivoted at the hip (see PLAYER_VISUAL.legsPivotYFraction) and
+    // swung procedurally with a sine wave while moving, instead of frame-swapping between
+    // independently AI-generated stride poses -- those don't share a registration point between
+    // generations, so swapping them reads as the whole body jittering rather than walking.
+    const legSwingAngle = this.moving
+      ? Math.sin((time / PLAYER_VISUAL.legSwingPeriodMs) * Math.PI * 2) * PLAYER_VISUAL.legSwingMaxRadians
+      : 0;
+    const hipOffsetY = (PLAYER_VISUAL.legsPivotYFraction - 0.5) * PLAYER_VISUAL.frameHeight * scaleY;
+
+    this.visualUpper
       .setDepth(visualDepth)
-      .setPosition(this.x, getGroundedVisualY(this.y, bob, footLift))
-      .setScale(baseScale * (1 + moveLean * 0.25), baseScale * squash);
+      .setPosition(this.x, upperY)
+      .setRotation(rotationDelta)
+      .setScale(scaleX, scaleY);
+    this.visualLegs
+      .setDepth(visualDepth - 0.1)
+      .setPosition(this.x, upperY + hipOffsetY)
+      .setRotation(rotationDelta + legSwingAngle)
+      .setScale(scaleX, scaleY);
     this.glow
       .setDepth(getGroundEffectDepth(this.y, 0.6))
-      .setPosition(this.x, this.y)
+      .setPosition(this.x, groundY)
       .setScale(1 + pulse + tier * 0.35 + offense * 0.12)
       .setAlpha(this.moving ? 0.76 + tier * 0.16 : 0.54 + tier * 0.18);
     // Enhanced depth-aware shadow for better grounding
@@ -163,12 +234,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.shadow
       .setDepth(getShadowDepth(this.y))
-      .setPosition(this.x - Math.cos(this.lastMoveAngle) * (this.moving ? 5 : 0), this.y + shadowOffset)
+      .setPosition(this.x - Math.cos(this.lastMoveAngle) * (this.moving ? 5 : 0), groundY + shadowOffset)
       .setScale((1.08 + tier * 0.34) * depthScale, shadowVerticalScale * depthScale)
       .setAlpha(0.1 + tier * 0.05 + (1 - shadowLength) * 0.1); // More transparent for objects further back
     this.energyField
       .setDepth(getGroundEffectDepth(this.y, 0.1))
-      .setPosition(this.x, this.y)
+      .setPosition(this.x, groundY)
       .setRadius(32 + tier * 18 + offense * 6)
       .setAlpha(0.06 + tier * 0.08)
       .setRotation(time / 900);
@@ -184,23 +255,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.updateOptionalRings(time, tier);
     this.updateOrbiters(time, tier);
     if (time >= this.hurtFeedbackUntil) {
-      this.visual.setAlpha(this.moving ? 1 : 0.97);
-    }
-  }
-
-  private playVisualAnimation(motion: PlayerVisualMotion): void {
-    const key = getPlayerVisualAnimationKey(this.facing, motion);
-    if (this.scene.anims.exists(key) && this.visual.anims.currentAnim?.key !== key) {
-      this.visual.play(key);
+      const restAlpha = this.moving ? 1 : 0.97;
+      this.visualUpper.setAlpha(restAlpha);
+      this.visualLegs.setAlpha(restAlpha);
     }
   }
 
   private updateOptionalRings(time: number, tier: number): void {
+    const groundY = projectY(this.y);
     const armorVisible = this.evolution.armorLevels > 0;
     this.shieldRing
       .setVisible(armorVisible)
       .setDepth(getVisualDepth(this.y, 1.65))
-      .setPosition(this.x, this.y)
+      .setPosition(this.x, groundY)
       .setRadius(33 + this.evolution.armorLevels * 3)
       .setRotation(-time / 520);
     this.shieldRing.setStrokeStyle(2 + Math.min(2, this.evolution.armorLevels), COLORS.playerShield, armorVisible ? 0.3 + tier * 0.18 : 0);
@@ -209,7 +276,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.magnetRing
       .setVisible(magnetVisible)
       .setDepth(getGroundEffectDepth(this.y))
-      .setPosition(this.x, this.y)
+      .setPosition(this.x, groundY)
       .setRadius(48 + this.evolution.magnetLevels * 7 + Math.sin(time / 360) * 3);
     this.magnetRing.setStrokeStyle(2, COLORS.playerMagnet, magnetVisible ? 0.12 + this.evolution.magnetLevels * 0.025 : 0);
 
@@ -217,12 +284,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.lifestealRing
       .setVisible(lifestealVisible)
       .setDepth(getGroundEffectDepth(this.y, 0.2))
-      .setPosition(this.x, this.y)
+      .setPosition(this.x, groundY)
       .setRadius(37 + Math.sin(time / 220) * 4)
       .setAlpha(lifestealVisible ? 0.24 + Math.sin(time / 180) * 0.05 : 0);
   }
 
   private updateOrbiters(time: number, tier: number): void {
+    const groundY = projectY(this.y);
     const count = this.evolution.projectileNodes;
     this.orbiters.forEach((orbiter, index) => {
       if (index >= count) {
@@ -233,7 +301,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const radius = 34 + tier * 16;
       orbiter
         .setDepth(getVisualDepth(this.y, 2.1))
-        .setPosition(this.x + Math.cos(angle) * radius, this.y + Math.sin(angle) * radius * 0.78)
+        .setPosition(this.x + Math.cos(angle) * radius, groundY + Math.sin(angle) * radius * 0.78)
         .setAlpha(0.52 + tier * 0.28)
         .setScale(0.58 + tier * 0.3)
         .setRotation(angle);
@@ -241,7 +309,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   destroy(fromScene?: boolean): void {
-    this.visual.destroy();
+    this.visualUpper.destroy();
+    this.visualLegs.destroy();
     this.glow.destroy();
     this.shadow.destroy();
     this.energyField.destroy();

@@ -1,21 +1,30 @@
-import type Phaser from 'phaser';
-
 export type PlayerVisualDirection = 'south' | 'east' | 'north' | 'west';
-export type PlayerVisualMotion = 'idle' | 'run';
 
+export const PLAYER_VISUAL_DIRECTIONS: readonly PlayerVisualDirection[] = ['south', 'east', 'north', 'west'];
+
+// The character sprite is split into two stacked layers instead of a hand-drawn walk-cycle atlas
+// (row 0 = upper body: head/torso/arms/gun, row 1 = legs only, one column per direction). Legs
+// are swung procedurally in Player.ts rather than frame-swapped, since independently AI-generated
+// alternate-stride frames don't share a registration point and jitter when swapped. See
+// scratchpad build-player-parts.js (this session) for exactly how the sheet was built from the
+// source renders and where legsPivotYFraction comes from.
 export const PLAYER_VISUAL = {
-  textureKey: 'player-cyber-survivor',
-  assetPath: 'assets/player-cyber-survivor.png',
+  textureKey: 'player-parts',
+  assetPath: 'assets/player-parts.png',
   fallbackTextureKey: 'player',
   frameWidth: 96,
   frameHeight: 96,
-  framesPerDirection: 6,
-  frameCount: 24,
+  upperRow: 0,
+  legsRow: 1,
   renderScale: 0.74,
   collisionRadius: 18,
+  // Both x (0.5) and this y are identical across all 4 directions because every source cutout
+  // was scaled/centered into its cell with the same transform before the hip cut was made.
+  legsPivotXFraction: 0.5,
+  legsPivotYFraction: 0.5602,
+  legSwingMaxRadians: 0.34,
+  legSwingPeriodMs: 260,
 } as const;
-
-export const PLAYER_VISUAL_DIRECTIONS: readonly PlayerVisualDirection[] = ['south', 'east', 'north', 'west'];
 
 export interface PlayerVisualVector {
   x: number;
@@ -23,8 +32,9 @@ export interface PlayerVisualVector {
   lengthSq(): number;
 }
 
-export function getPlayerVisualAnimationKey(direction: PlayerVisualDirection, motion: PlayerVisualMotion): string {
-  return `player-${motion}-${direction}`;
+export function getPlayerVisualFrame(direction: PlayerVisualDirection, row: number): number {
+  const column = PLAYER_VISUAL_DIRECTIONS.indexOf(direction);
+  return row * PLAYER_VISUAL_DIRECTIONS.length + column;
 }
 
 export function getPlayerVisualDirection(
@@ -38,32 +48,4 @@ export function getPlayerVisualDirection(
     return vector.x >= 0 ? 'east' : 'west';
   }
   return vector.y >= 0 ? 'south' : 'north';
-}
-
-export function registerPlayerVisualAnimations(anims: Phaser.Animations.AnimationManager): void {
-  PLAYER_VISUAL_DIRECTIONS.forEach((direction, row) => {
-    const baseFrame = row * PLAYER_VISUAL.framesPerDirection;
-    const idleKey = getPlayerVisualAnimationKey(direction, 'idle');
-    const runKey = getPlayerVisualAnimationKey(direction, 'run');
-
-    if (!anims.exists(idleKey)) {
-      anims.create({
-        key: idleKey,
-        frames: anims.generateFrameNumbers(PLAYER_VISUAL.textureKey, { frames: [baseFrame, baseFrame + 1] }),
-        frameRate: 3,
-        repeat: -1,
-      });
-    }
-
-    if (!anims.exists(runKey)) {
-      anims.create({
-        key: runKey,
-        frames: anims.generateFrameNumbers(PLAYER_VISUAL.textureKey, {
-          frames: [baseFrame + 2, baseFrame + 3, baseFrame + 4, baseFrame + 5],
-        }),
-        frameRate: 10,
-        repeat: -1,
-      });
-    }
-  });
 }

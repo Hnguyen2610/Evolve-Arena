@@ -2,7 +2,7 @@ export type GameMode = 'menu' | 'playing' | 'level-up' | 'paused' | 'game-over' 
 
 export type ChapterId = 'chapter-1' | 'chapter-2';
 
-export type StageId = 'stage-1' | 'stage-2' | 'stage-3' | 'stage-4';
+export type StageId = 'stage-1' | 'stage-2' | 'stage-3' | 'stage-4' | 'stage-5' | 'stage-6';
 
 export type EnemyType =
   | 'basic'
@@ -20,7 +20,8 @@ export type EnemyType =
   | 'boss'
   | 'rift-boss'
   | 'forge-boss'
-  | 'grid-boss';
+  | 'grid-boss'
+  | 'conductor-boss';
 
 export type UpgradeRarity = 'common' | 'rare' | 'epic';
 
@@ -76,6 +77,9 @@ export interface EnemyRuntimeData {
   contactReadyAt: number;
   chargeUntil: number;
   telegraphUntil: number;
+  stunUntil: number;
+  shieldUntil: number;
+  vulnerableDamageUntil: number;
 }
 
 export interface ProjectileData {
@@ -153,6 +157,7 @@ export interface RunResult {
   overloadEvents: number;
   overloadHits: number;
   overloadDamageTaken: number;
+  conductorBossStaggeredByPulse: number;
 }
 
 export interface StageVisualTheme {

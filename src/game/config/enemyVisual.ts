@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { EnemyType } from '../types';
 
-export type EnemyVisualType = Exclude<EnemyType, 'boss' | 'rift-boss' | 'forge-boss' | 'grid-boss'>;
+export type EnemyVisualType = Exclude<EnemyType, 'boss' | 'rift-boss' | 'forge-boss' | 'grid-boss' | 'conductor-boss'>;
 
 export interface EnemyVisualConfig {
   enemyType: EnemyVisualType;

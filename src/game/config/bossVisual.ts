@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import type { EnemyType } from '../types';
 
-export type BossVisualType = Extract<EnemyType, 'boss' | 'rift-boss' | 'forge-boss' | 'grid-boss'>;
+export type BossVisualType = Extract<EnemyType, 'boss' | 'rift-boss' | 'forge-boss' | 'grid-boss' | 'conductor-boss'>;
 export type BossVisualState = 'move' | 'attack';
 
 export interface BossVisualConfig {
@@ -24,7 +24,7 @@ export const BOSS_VISUAL_ATLAS = {
   moveFrames: 4,
 } as const;
 
-export const BOSS_VISUAL_TYPES: readonly BossVisualType[] = ['boss', 'rift-boss', 'forge-boss', 'grid-boss'];
+export const BOSS_VISUAL_TYPES: readonly BossVisualType[] = ['boss', 'rift-boss', 'forge-boss', 'grid-boss', 'conductor-boss'];
 
 export const BOSS_VISUALS: Record<BossVisualType, BossVisualConfig> = {
   boss: {
@@ -66,6 +66,16 @@ export const BOSS_VISUALS: Record<BossVisualType, BossVisualConfig> = {
     scale: 1.06,
     moveFrameRate: 5,
     attackFrameRate: 8,
+  },
+  'conductor-boss': {
+    bossType: 'conductor-boss',
+    stageIdentity: 'SYNC',
+    concept: 'cybernetic conductor wielding harmonic resonance baton',
+    silhouette: 'tall slender figure with exaggerated upper body and prominent baton headpiece',
+    row: 4,
+    scale: 1.0,
+    moveFrameRate: 4,
+    attackFrameRate: 6,
   },
 };
 

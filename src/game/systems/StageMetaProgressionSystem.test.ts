@@ -27,6 +27,7 @@ function result(input: Partial<RunResult> & { stageId?: StageId } = {}): RunResu
     overloadEvents: input.overloadEvents ?? 0,
     overloadHits: input.overloadHits ?? 0,
     overloadDamageTaken: input.overloadDamageTaken ?? 0,
+    conductorBossStaggeredByPulse: input.conductorBossStaggeredByPulse ?? 0,
   };
 }
 
@@ -72,6 +73,21 @@ describe('StageMetaProgressionSystem', () => {
       survivalSeconds: 110,
       overloadEvents: 2,
       overloadHits: 3,
+    })).stars).toBe(3);
+  });
+
+  it('evaluates stage 5 mastery using Nexus Pulse boss staggers', () => {
+    expect(evaluateStageMastery(result({
+      stageId: 'stage-5',
+      chapterId: 'chapter-2',
+      survivalSeconds: 105,
+      conductorBossStaggeredByPulse: 1,
+    })).stars).toBe(2);
+    expect(evaluateStageMastery(result({
+      stageId: 'stage-5',
+      chapterId: 'chapter-2',
+      survivalSeconds: 105,
+      conductorBossStaggeredByPulse: 2,
     })).stars).toBe(3);
   });
 
